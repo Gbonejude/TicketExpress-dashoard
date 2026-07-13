@@ -1,9 +1,9 @@
 <div align="center">
-<img src="public/images/logo.jpg" width="200" alt="ASHUM CARE Logo">
+<img src="public/favicon.png" width="120" alt="Ticket Express Logo">
 
-# 🏥 ASHUM — CARE · Dashboard Web
+# 🎟️ Ticket Express · Dashboard Web
 
-**Interface d'administration de la plateforme digitale d'assistance infirmière et de soins à domicile**
+**Interface d'administration de la plateforme de billetterie et de gestion d'événements**
 
 [![Status](https://img.shields.io/badge/status-en%20développement-yellow)](.)
 [![License](https://img.shields.io/badge/license-MIT-blue)](./LICENSE)
@@ -11,7 +11,7 @@
 [![Vue](https://img.shields.io/badge/Vue-3-42b883)](.)
 [![Vuetify](https://img.shields.io/badge/Vuetify-3-1867c0)](.)
 
-_Transparence · Traçabilité · Continuité des soins_
+_Événements · Billetterie · Paiements en temps réel_
 
 </div>
 
@@ -32,41 +32,39 @@ _Transparence · Traçabilité · Continuité des soins_
 
 ## 🎯 À propos
 
-Ce dépôt contient le **dashboard web d'administration** de la plateforme **ASHUM-CARE**, qui connecte des infirmiers certifiés avec des patients à domicile ou en milieu hospitalier.
+Ce dépôt contient le **dashboard web d'administration** de la plateforme **Ticket Express**, une solution de billetterie en ligne qui met en relation des organisateurs d'événements avec leur public.
 
-Le dashboard permet aux administrateurs de superviser et gérer l'ensemble de la plateforme : catalogue de services, catégories de soins, utilisateurs et infirmiers.
+Le dashboard permet aux administrateurs de superviser et gérer l'ensemble de la plateforme : événements, billets, commandes, salles, organisateurs, paiements et retraits.
 
-> **Contexte** : ASHUM-CARE est pensée pour les familles éloignées (diaspora) qui souhaitent déléguer la prise en charge médicale d'un proche tout en conservant une visibilité totale et en temps réel sur chaque intervention.
+> **Contexte** : Ticket Express centralise la création et la vente de billets, le suivi des commandes et des paiements, ainsi que la gestion des organisateurs et de leurs reversements, le tout en temps réel.
 
 ---
 
 ## ✨ Fonctionnalités
 
-### Gestion du catalogue
+### Gestion des événements & de la billetterie
 
-- 🗂️ **Catégories de soins** — Création, édition, activation/désactivation (avec génération automatique du slug)
-- 🩺 **Services** — Ajout et suppression de prestations avec prix de base et catégorie associée
+- 🎪 **Événements** — Création, édition et publication d'événements
+- 🎟️ **Billets** — Configuration des catégories de billets, quotas et tarifs
+- 🏟️ **Salles / Lieux (venues)** — Gestion des lieux d'accueil
+- 🗂️ **Catégories** — Classement des événements par catégorie
+- 🏷️ **Coupons & Promotions** — Codes de réduction et offres promotionnelles
 
-### Gestion des utilisateurs
+### Ventes & finances
 
-- 👥 **Liste des utilisateurs** — Vue d'ensemble avec rôle (Acteur de vie, Infirmier, Admin) et statut de vérification
-- 🔍 Recherche en temps réel sur tous les tableaux
+- 🧾 **Commandes** — Suivi des commandes et de leur statut
+- 💳 **Paiements** — Historique et suivi des transactions
+- 💸 **Retraits (withdrawals)** — Gestion des reversements aux organisateurs
+- ⭐ **Avis (reviews)** — Modération des évaluations des participants
 
-### Workflow métier (backend)
+### Administration
 
-1. **Commande** : L'acteur de vie commande un soin pour son proche.
-2. **Matching** : Le système assigne un infirmier certifié à proximité.
-3. **Terrain** : L'infirmier géo-valide son arrivée (rayon ≤ 20 m).
-4. **Suivi** : Les constantes vitales sont transmises en temps réel.
-5. **Clôture** : Rapport généré, infirmier payé.
-
-### Catalogue de prestations
-
-| Catégorie | Exemples |
-|---|---|
-| 🏨 Accompagnement hospitalier | Transport domicile ↔ hôpital, assistance administrative |
-| 💉 Soins infirmiers techniques | Injections, pansements, perfusions, éducation thérapeutique |
-| 🛁 Soins de base & Hygiène | Toilette, aide au lever/coucher, aide à la prise de médicaments |
+- 🧑‍💼 **Organisateurs** — Gestion et validation des comptes organisateurs
+- 👥 **Utilisateurs** — Vue d'ensemble des comptes et statuts
+- 🔐 **Rôles & permissions** — Contrôle d'accès par rôle
+- 🔔 **Notifications** — Centre de notifications
+- ⚙️ **Paramètres & Compte** — Configuration de la plateforme et profil admin
+- 📊 **Dashboard** — Indicateurs clés et vue synthétique de l'activité
 
 ---
 
@@ -80,9 +78,9 @@ Le dashboard permet aux administrateurs de superviser et gérer l'ensemble de la
 | **Pinia** | Gestion d'état |
 | **Vue Router 4** | Routing (file-based via unplugin-vue-router) |
 | **VueUse** | Composables utilitaires (`useApi`, `useCookie`…) |
-| **ofetch** | Requêtes HTTP vers l'API Laravel |
+| **ofetch** | Requêtes HTTP vers l'API |
 
-> Le dashboard communique avec le **backend Laravel 12** via une API REST sécurisée par Laravel Sanctum (token Bearer).
+> Le dashboard communique avec le **backend** via une API REST sécurisée par token Bearer (Laravel Sanctum).
 
 ---
 
@@ -98,7 +96,7 @@ Le dashboard permet aux administrateurs de superviser et gérer l'ensemble de la
 ```bash
 # 1. Cloner le projet
 git clone <votre-repo-url>
-cd ashum_care_web_dashboard
+cd TicketExpress-dashoard
 
 # 2. Installer les dépendances
 pnpm install
@@ -126,9 +124,21 @@ pnpm preview
 src/
 ├── pages/
 │   └── app/                  # Pages de l'application (routing file-based)
-│       ├── services/         # Gestion des services
-│       ├── categories/       # Gestion des catégories
-│       └── users/            # Gestion des utilisateurs
+│       ├── dashboard/        # Tableau de bord
+│       ├── events/           # Gestion des événements
+│       ├── tickets/          # Gestion des billets
+│       ├── orders/           # Commandes
+│       ├── venues/           # Salles / lieux
+│       ├── organizers/       # Organisateurs
+│       ├── payments/         # Paiements
+│       ├── withdrawals/      # Retraits
+│       ├── coupons/          # Coupons
+│       ├── promotions/       # Promotions
+│       ├── categories/       # Catégories
+│       ├── reviews/          # Avis
+│       ├── users/            # Utilisateurs
+│       ├── roles/            # Rôles & permissions
+│       └── settings/         # Paramètres
 ├── navigation/
 │   └── vertical/             # Configuration du drawer de navigation
 │       └── index.js          # Entrées du menu principal
@@ -147,7 +157,7 @@ src/
 Copier `.env.example` en `.env` et renseigner les valeurs :
 
 ```env
-# URL de base de l'API backend Laravel
+# URL de base de l'API backend
 VITE_API_BASE_URL=https://<votre-domaine>/api/v1
 ```
 
@@ -168,14 +178,14 @@ Le composable `useApi` utilise automatiquement cette variable pour toutes les re
 1. Créer une branche : `git checkout -b feature/nom-de-la-feature`
 2. Développer et tester localement : `pnpm dev`
 3. Builder pour vérifier : `pnpm build`
-4. Ouvrir une Pull Request vers `main`.
+4. Ouvrir une Pull Request vers `develop`.
 
 ---
 
 <div align="center">
 
-Fait avec ❤️ par l'équipe **ASHUM-CARE**
+Fait avec ❤️ par l'équipe **Ticket Express**
 
-_Des soins dignes, traçables et accessibles pour tous._
+_La billetterie d'événements, simple et en temps réel._
 
 </div>
