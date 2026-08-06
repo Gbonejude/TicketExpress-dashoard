@@ -1,104 +1,146 @@
 <script setup>
-import { useGenerateImageVariant } from '@core/composable/useGenerateImageVariant'
+import { $api } from '@/utils/api'
+import { notify, notifyApiError } from '@/utils/toast'
+import authV1BottomShape from '@images/svg/auth-v1-bottom-shape.svg?raw'
+import authV1TopShape from '@images/svg/auth-v1-top-shape.svg?raw'
 import { VNodeRenderer } from '@layouts/components/VNodeRenderer'
 import { themeConfig } from '@themeConfig'
-import authV2ForgotPasswordIllustrationDark from '@images/pages/auth-v2-forgot-password-illustration-dark.png'
-import authV2ForgotPasswordIllustrationLight from '@images/pages/auth-v2-forgot-password-illustration-light.png'
-import authV2MaskDark from '@images/pages/misc-mask-dark.png'
-import authV2MaskLight from '@images/pages/misc-mask-light.png'
-
-const email = ref('')
-const authThemeImg = useGenerateImageVariant(authV2ForgotPasswordIllustrationLight, authV2ForgotPasswordIllustrationDark)
-const authThemeMask = useGenerateImageVariant(authV2MaskLight, authV2MaskDark)
 
 definePage({
   meta: {
     layout: 'blank',
-    unauthenticatedOnly: true,
+    public: true,
   },
 })
+
+/**
+ * Mot de passe oublié.
+ *
+ * Mise en page reprise de `forgot-password-v1` du thème : carte centrée entre les
+ * deux formes colorées. C'est celle de notre écran de connexion — les deux pages
+ * s'enchaînent, elles doivent se ressembler.
+ *
+ * Le formulaire du thème était décoratif (`@submit.prevent="() => {}"`) : il ne
+ * partait nulle part. Il appelle maintenant `auth/forgot-password`, la route qui
+ * envoie le lien — indispensable depuis qu'un compte créé au back-office reçoit
+ * un mot de passe généré qu'il doit pouvoir renouveler lui-même.
+ *
+ * La réponse ne dit jamais si l'adresse existe : ce serait indiquer à un inconnu
+ * quels comptes sont ouverts.
+ */
+const form = ref({ email: '' })
+
+const refForm = ref()
+const isSubmitting = ref(false)
+const isSent = ref(false)
+const errors = ref({ email: undefined })
+
+const onSubmit = async () => {
+  const { valid } = await refForm.value?.validate() ?? { valid: true }
+  if (!valid) return
+
+  isSubmitting.value = true
+  errors.value = { email: undefined }
+  try {
+    await $api('/auth/forgot-password', {
+      method: 'POST',
+      body: { email: form.value.email },
+    })
+    isSent.value = true
+    notify('Si un compte existe pour cette adresse, un lien vient de lui être envoyé.')
+  } catch (error) {
+    const data = error?.data ?? error?._data
+    if (data?.errors?.email) errors.value.email = data.errors.email
+    else notifyApiError(error, "Impossible d'envoyer le lien pour le moment.")
+  } finally {
+    isSubmitting.value = false
+  }
+}
 </script>
 
 <template>
-  <RouterLink to="/">
-    <div class="auth-logo d-flex align-center gap-x-3">
-      <VNodeRenderer :nodes="themeConfig.app.logo" />
-      <h1 class="auth-title">
-        {{ themeConfig.app.title }}
-      </h1>
-    </div>
-  </RouterLink>
+  <div class="auth-wrapper d-flex align-center justify-center pa-4">
+    <div class="position-relative my-sm-16">
+      <!-- 👉 Top shape -->
+      <VNodeRenderer
+        :nodes="h('div', { innerHTML: authV1TopShape })"
+        class="text-primary auth-v1-top-shape d-none d-sm-block"
+      />
 
-  <VRow
-    class="auth-wrapper bg-surface"
-    no-gutters
-  >
-    <VCol
-      md="8"
-      class="d-none d-md-flex"
-    >
-      <div class="position-relative bg-background w-100 me-0">
-        <div
-          class="d-flex align-center justify-center w-100 h-100"
-          style="padding-inline: 150px;"
-        >
-          <VImg
-            max-width="468"
-            :src="authThemeImg"
-            class="auth-illustration mt-16 mb-2"
-          />
-        </div>
+      <!-- 👉 Bottom shape -->
+      <VNodeRenderer
+        :nodes="h('div', { innerHTML: authV1BottomShape })"
+        class="text-primary auth-v1-bottom-shape d-none d-sm-block"
+      />
 
-        <img
-          class="auth-footer-mask"
-          :src="authThemeMask"
-          alt="auth-footer-mask"
-          height="280"
-          width="100"
-        >
-      </div>
-    </VCol>
-
-    <VCol
-      cols="12"
-      md="4"
-      class="d-flex align-center justify-center"
-    >
+      <!-- 👉 Auth card -->
       <VCard
-        flat
-        :max-width="500"
-        class="mt-12 mt-sm-0 pa-4"
+        class="auth-card"
+        max-width="460"
+        :class="$vuetify.display.smAndUp ? 'pa-6' : 'pa-0'"
       >
+        <VCardItem class="justify-center">
+          <VCardTitle>
+            <RouterLink to="/">
+              <div class="app-logo">
+                <VNodeRenderer :nodes="themeConfig.app.logo" />
+                <h1 class="app-logo-title">
+                  {{ themeConfig.app.title }}
+                </h1>
+              </div>
+            </RouterLink>
+          </VCardTitle>
+        </VCardItem>
+
         <VCardText>
           <h4 class="text-h4 mb-1">
-            Forgot Password? 🔒
+            Mot de passe oublié ? 🔒
           </h4>
           <p class="mb-0">
-            Enter your email and we'll send you instructions to reset your password
+            Indiquez votre adresse : nous vous envoyons un lien pour en choisir un nouveau.
           </p>
         </VCardText>
 
         <VCardText>
-          <VForm @submit.prevent="() => {}">
+          <VForm
+            ref="refForm"
+            @submit.prevent="onSubmit"
+          >
             <VRow>
+              <VCol
+                v-if="isSent"
+                cols="12"
+              >
+                <VAlert
+                  type="success"
+                  variant="tonal"
+                  density="compact"
+                >
+                  Lien envoyé. Vérifiez votre boîte de réception, et vos indésirables.
+                </VAlert>
+              </VCol>
+
               <!-- email -->
               <VCol cols="12">
                 <AppTextField
-                  v-model="email"
+                  v-model="form.email"
                   autofocus
                   label="Email"
                   type="email"
-                  placeholder="johndoe@email.com"
+                  placeholder="vous@exemple.tg"
+                  :rules="[requiredValidator, emailValidator]"
+                  :error-messages="errors.email"
                 />
               </VCol>
 
-              <!-- Reset link -->
+              <!-- reset password -->
               <VCol cols="12">
                 <VBtn
                   block
                   type="submit"
+                  :loading="isSubmitting"
                 >
-                  Send Reset Link
+                  Envoyer le lien
                 </VBtn>
               </VCol>
 
@@ -106,24 +148,24 @@ definePage({
               <VCol cols="12">
                 <RouterLink
                   class="d-flex align-center justify-center"
-                  :to="{ name: 'login' }"
+                  :to="{ name: 'template-login' }"
                 >
                   <VIcon
                     icon="tabler-chevron-left"
                     size="20"
                     class="me-1 flip-in-rtl"
                   />
-                  <span>Back to login</span>
+                  <span>Retour à la connexion</span>
                 </RouterLink>
               </VCol>
             </VRow>
           </VForm>
         </VCardText>
       </VCard>
-    </VCol>
-  </VRow>
+    </div>
+  </div>
 </template>
 
 <style lang="scss">
-@use "@core/scss/template/pages/page-auth.scss";
+@use "@core/scss/template/pages/page-auth";
 </style>

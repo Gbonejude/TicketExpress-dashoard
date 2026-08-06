@@ -146,12 +146,27 @@ const onSubmit = () => {
                   @click:append-inner="isPasswordVisible = !isPasswordVisible"
                 />
 
+                <!--
+                  Le mot de passe d'un compte créé depuis le back-office est
+                  généré et envoyé par mail : ce lien est le seul chemin pour
+                  le renouveler, il ne peut pas manquer de l'écran de
+                  connexion. 
+                -->
+                <div class="d-flex justify-end mt-2">
+                  <RouterLink
+                    class="text-primary text-body-2"
+                    :to="{ name: 'template-forgot-password' }"
+                  >
+                    Mot de passe oublié ?
+                  </RouterLink>
+                </div>
+
                 <VBtn
                   block
                   type="submit"
                   class="mt-6"
                 >
-                  Login
+                  Se connecter
                 </VBtn>
               </VCol>
             </VRow>

@@ -1,1 +1,98 @@
 // Write your overrides
+
+/* --- Toasts (SweetAlert2) ----------------------------------------------------
+   SweetAlert arrive avec sa propre palette et sa pile Roboto. Ces règles le
+   remettent sur le thème Vuetify (variables `--v-theme-*`), donc un toast suit
+   le mode clair/sombre du back-office au lieu d'être toujours blanc.
+   Voir `src/utils/toast.js`. */
+
+.swal2-container.swal2-top-end {
+  z-index: 2600; // au-dessus de l'app bar et des dialogs Vuetify
+  padding: 1rem;
+}
+
+/* Les gouttières sont posées axe par axe, jamais avec le raccourci `gap` :
+   SweetAlert fait s'étendre l'icône, le loader et le bouton de fermeture sur
+   `grid-row: 1 / 99`, la popup a donc réellement 98 lignes et un `row-gap`
+   ajoute une centaine de gouttières — le toast descend alors jusqu'en bas de
+   la page. Seule la gouttière de colonne est voulue. */
+.te-toast.swal2-popup {
+  max-width: min(22rem, calc(100vw - 2rem));
+  padding: 1rem;
+  border: 1px solid rgba(var(--v-border-color), var(--v-border-opacity));
+  border-radius: 6px;
+  background-color: rgb(var(--v-theme-surface));
+  box-shadow: 0 4px 18px rgb(0 0 0 / 18%);
+  column-gap: 0.75rem;
+  font-family: inherit;
+  row-gap: 0;
+}
+
+.te-toast__title.swal2-title {
+  padding: 0;
+  color: rgba(var(--v-theme-on-surface), var(--v-high-emphasis-opacity));
+  font-size: 0.9375rem;
+  font-weight: 400;
+  line-height: 1.45;
+  text-align: start;
+}
+
+/* L'icône porte le sens, la popup reste neutre : un toast d'erreur rouge sur
+   rouge est illisible. */
+.te-toast .swal2-icon {
+  width: 1.75rem;
+  min-width: 1.75rem;
+  height: 1.75rem;
+  margin: 0;
+  border-width: 2px;
+}
+
+.te-toast .swal2-icon .swal2-icon-content {
+  font-size: 1.1rem;
+}
+
+.te-toast .swal2-icon.swal2-success {
+  border-color: rgb(var(--v-theme-success));
+  color: rgb(var(--v-theme-success));
+}
+
+.te-toast .swal2-icon.swal2-success [class^='swal2-success-line'] {
+  background-color: rgb(var(--v-theme-success));
+}
+
+.te-toast .swal2-icon.swal2-success .swal2-success-ring {
+  border-color: rgba(var(--v-theme-success), 35%);
+}
+
+.te-toast .swal2-icon.swal2-error {
+  border-color: rgb(var(--v-theme-error));
+  color: rgb(var(--v-theme-error));
+}
+
+.te-toast .swal2-icon.swal2-error [class^='swal2-x-mark-line'] {
+  background-color: rgb(var(--v-theme-error));
+}
+
+.te-toast .swal2-icon.swal2-warning {
+  border-color: rgb(var(--v-theme-warning));
+  color: rgb(var(--v-theme-warning));
+}
+
+.te-toast .swal2-icon.swal2-info {
+  border-color: rgb(var(--v-theme-info));
+  color: rgb(var(--v-theme-info));
+}
+
+.te-toast__progress.swal2-timer-progress-bar {
+  background-color: rgba(var(--v-theme-on-surface), 20%);
+}
+
+.te-toast .swal2-close {
+  color: rgba(var(--v-theme-on-surface), var(--v-medium-emphasis-opacity));
+  font-size: 1.5rem;
+}
+
+.te-toast .swal2-close:focus-visible {
+  outline: 2px solid rgb(var(--v-theme-primary));
+  box-shadow: none;
+}

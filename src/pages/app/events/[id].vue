@@ -1,4 +1,8 @@
 <script setup>
+import { notify, notifyApiError } from '@/utils/toast'
+
+import { formatDateFr } from '@/utils/dateFormat'
+
 definePage({
   meta: {
     action: 'read',
@@ -14,7 +18,7 @@ const eventId = route.params.id
 
 // Open the tab requested via ?tab= (e.g. from the "Gérer la billetterie"
 // action on the events list), defaulting to occurrences.
-const activeTab = ref(['occurrences', 'ticket-types', 'stats'].includes(route.query.tab) ? route.query.tab : 'occurrences')
+const activeTab = ref(['occurrences', 'ticket-types', 'stats', 'check-in'].includes(route.query.tab) ? route.query.tab : 'occurrences')
 
 /* ─────────────────────────────────────────────────────────────────────────
  * Event header
@@ -22,6 +26,9 @@ const activeTab = ref(['occurrences', 'ticket-types', 'stats'].includes(route.qu
 const eventUrl = computed(() => `/events/${eventId}`)
 const { data: eventResp, isFetching: eventLoading } = useApi(eventUrl)
 const event = computed(() => eventResp.value?.data ?? null)
+
+/** Affiche en grand (voir ImageLightbox). */
+const isBannerOpen = ref(false)
 
 const eventStatusColor = status => ({
   draft: 'secondary',
@@ -62,7 +69,6 @@ const occHeaders = [
   { title: 'Fin', key: 'end' },
   { title: 'Capacité', key: 'capacity' },
   { title: 'Statut', key: 'status' },
-  { title: 'Notes', key: 'notes' },
   { title: 'Actions', key: 'actions', sortable: false },
 ]
 
@@ -142,6 +148,7 @@ const saveOccurrence = async () => {
       end_date: occForm.end_date,
       status: occForm.status,
     }
+
     if (occForm.max_attendees !== '' && occForm.max_attendees !== null)
       payload.max_attendees = Number(occForm.max_attendees)
     if (occForm.notes) payload.notes = occForm.notes
@@ -153,9 +160,13 @@ const saveOccurrence = async () => {
       await $api('/event-occurrences', { method: 'POST', body: payload })
     }
     isOccDialogOpen.value = false
+    notify(editingOccurrence.value ? 'Occurrence mise à jour.' : 'Occurrence ajoutée.')
     fetchOccurrences()
   } catch (err) {
-    occErrors.value = err?.data?.errors ?? err?.response?._data?.errors ?? {}
+    const errors = err?.data?.errors ?? err?.response?._data?.errors
+
+    occErrors.value = errors ?? {}
+    if (!errors) notifyApiError(err, "Impossible d'enregistrer l'occurrence.")
   } finally {
     isSubmitting.value = false
   }
@@ -166,7 +177,10 @@ const confirmOccDelete = async () => {
   try {
     await $api(`/event-occurrences/${deletingOccurrence.value.id}`, { method: 'DELETE' })
     isOccDeleteDialogOpen.value = false
+    notify('Occurrence supprimée.')
     fetchOccurrences()
+  } catch (error) {
+    notifyApiError(error, "Impossible de supprimer l'occurrence.")
   } finally {
     isSubmitting.value = false
   }
@@ -221,7 +235,7 @@ const ticketForm = reactive({
 // Occurrences the ticket type can be tied to (for multi-date events).
 const occurrenceOptions = computed(() => occurrences.value.map(o => ({
   value: o.id,
-  title: o.startDate?.human ?? o.startDate?.datetime ?? 'Séance',
+  title: formatDateFr(o.startDate) || o.startDate?.datetime || 'Séance',
 })))
 
 const resetTicketForm = () => {
@@ -287,6 +301,7 @@ const saveTicket = async () => {
       is_featured: ticketForm.is_featured,
       benefits: ticketForm.benefits ?? [],
     }
+
     if (ticketForm.occurrence_id) payload.occurrence_id = ticketForm.occurrence_id
     if (ticketForm.description) payload.description = ticketForm.description
     if (ticketForm.sale_start_date) payload.sale_start_date = ticketForm.sale_start_date
@@ -306,9 +321,13 @@ const saveTicket = async () => {
       await $api(`/events/${eventId}/ticket-types`, { method: 'POST', body: payload })
     }
     isTicketDialogOpen.value = false
+    notify(editingTicket.value ? 'Type de billet mis à jour.' : 'Type de billet créé.')
     fetchTickets()
   } catch (err) {
-    ticketErrors.value = err?.data?.errors ?? err?.response?._data?.errors ?? {}
+    const errors = err?.data?.errors ?? err?.response?._data?.errors
+
+    ticketErrors.value = errors ?? {}
+    if (!errors) notifyApiError(err, "Impossible d'enregistrer le type de billet.")
   } finally {
     isSubmitting.value = false
   }
@@ -319,7 +338,10 @@ const confirmTicketDelete = async () => {
   try {
     await $api(`/events/${eventId}/ticket-types/${deletingTicket.value.id}`, { method: 'DELETE' })
     isTicketDeleteDialogOpen.value = false
+    notify('Type de billet supprimé.')
     fetchTickets()
+  } catch (error) {
+    notifyApiError(error, 'Impossible de supprimer le type de billet.')
   } finally {
     isSubmitting.value = false
   }
@@ -335,9 +357,13 @@ const stats = computed(() => statsResp.value?.data ?? null)
 const statsRows = computed(() => stats.value?.ticketTypes ?? [])
 const statsTotals = computed(() => stats.value?.totals ?? null)
 
-// Live (silent) refresh: a purchase or a scan changes these numbers.
-useRealtimeRefresh('tickets', () => { if (activeTab.value === 'stats') fetchStats() })
-useRealtimeRefresh('orders', () => { if (activeTab.value === 'stats') fetchStats() })
+// Live (silent) refresh: a purchase or a scan changes these numbers. L'onglet
+// contrôle d'accès affiche le compteur « entrées / vendus », il a donc besoin
+// des mêmes chiffres.
+const NEEDS_STATS = ['stats', 'check-in']
+
+useRealtimeRefresh('tickets', () => { if (NEEDS_STATS.includes(activeTab.value)) fetchStats() })
+useRealtimeRefresh('orders', () => { if (NEEDS_STATS.includes(activeTab.value)) fetchStats() })
 
 // Declared event capacity, falling back to the total of ticket-type quantities.
 const maxCapacity = computed(() => stats.value?.event?.maxAttendees ?? statsTotals.value?.quantity ?? 0)
@@ -378,6 +404,7 @@ const statsHeaders = [
           v-else-if="event"
           class="d-flex flex-wrap gap-6"
         >
+          <!-- Cliquable : l'affiche en grand, pour la vérifier. -->
           <VImg
             v-if="event.banner"
             :src="toMediaUrl(event.banner)"
@@ -385,7 +412,8 @@ const statsHeaders = [
             :height="140"
             cover
             rounded="lg"
-            class="flex-grow-0"
+            class="flex-grow-0 cursor-pointer"
+            @click="isBannerOpen = true"
           />
           <VAvatar
             v-else
@@ -430,7 +458,7 @@ const statsHeaders = [
                   icon="tabler-calendar"
                   size="18"
                 />
-                <span>{{ event.startDate?.human ?? '-' }} → {{ event.endDate?.human ?? '-' }}</span>
+                <span>{{ formatDateFr(event.startDate) }} → {{ formatDateFr(event.endDate) }}</span>
               </div>
               <div class="d-flex align-center gap-2">
                 <VIcon
@@ -476,6 +504,13 @@ const statsHeaders = [
           />
           Statistiques
         </VTab>
+        <VTab value="check-in">
+          <VIcon
+            start
+            icon="tabler-qrcode"
+          />
+          Contrôle d'accès
+        </VTab>
       </VTabs>
 
       <VDivider />
@@ -511,11 +546,11 @@ const statsHeaders = [
             @update:options="onOccOptions"
           >
             <template #item.start="{ item }">
-              {{ item.startDate?.human ?? '-' }}
+              {{ formatDateFr(item.startDate) }}
             </template>
 
             <template #item.end="{ item }">
-              {{ item.endDate?.human ?? '-' }}
+              {{ formatDateFr(item.endDate) }}
             </template>
 
             <template #item.capacity="{ item }">
@@ -540,18 +575,6 @@ const statsHeaders = [
               >
                 {{ occStatusLabel(item.status) }}
               </VChip>
-            </template>
-
-            <template #item.notes="{ item }">
-              <span
-                v-if="item.notes"
-                class="text-truncate d-inline-block"
-                style="max-width: 220px"
-              >{{ item.notes }}</span>
-              <span
-                v-else
-                class="text-medium-emphasis"
-              >-</span>
             </template>
 
             <template #item.actions="{ item }">
@@ -938,6 +961,16 @@ const statsHeaders = [
             </template>
           </VCardText>
         </VWindowItem>
+
+        <!-- ═══ Contrôle d'accès ══════════════════════════════════════════ -->
+        <VWindowItem value="check-in">
+          <EventCheckInPanel
+            :event-id="String(eventId)"
+            :sold="statsTotals?.sold ?? null"
+            :scanned="statsTotals?.scanned ?? null"
+            @validated="fetchStats"
+          />
+        </VWindowItem>
       </VWindow>
     </VCard>
 
@@ -1043,7 +1076,7 @@ const statsHeaders = [
         <VCardText class="pt-4">
           <p class="text-body-2">
             Êtes-vous sûr de vouloir supprimer cette occurrence
-            <strong>{{ deletingOccurrence?.startDate?.human }}</strong> ?
+            <strong>{{ formatDateFr(deletingOccurrence?.startDate) }}</strong> ?
             Cette action est irréversible.
           </p>
         </VCardText>
@@ -1311,5 +1344,11 @@ const statsHeaders = [
         </VCardActions>
       </VCard>
     </VDialog>
+
+    <ImageLightbox
+      v-model="isBannerOpen"
+      :src="event?.banner ? toMediaUrl(event.banner) : null"
+      :title="event?.title"
+    />
   </div>
 </template>

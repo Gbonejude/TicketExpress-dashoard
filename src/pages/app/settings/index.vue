@@ -1,4 +1,6 @@
 <script setup>
+import { notify } from '@/utils/toast'
+
 definePage({
   meta: {
     action: 'read',
@@ -13,16 +15,6 @@ const isSubmitting = ref(false)
 const refForm = ref()
 
 const commissionPercent = ref(5)
-
-const snackbar = ref(false)
-const snackText = ref('')
-const snackColor = ref('success')
-
-const notify = (text, color = 'success') => {
-  snackText.value = text
-  snackColor.value = color
-  snackbar.value = true
-}
 
 const loadSettings = async () => {
   isLoading.value = true
@@ -133,12 +125,5 @@ const saveSettings = async () => {
       </VCardText>
     </VCard>
 
-    <VSnackbar
-      v-model="snackbar"
-      :color="snackColor"
-      location="top end"
-    >
-      {{ snackText }}
-    </VSnackbar>
   </div>
 </template>

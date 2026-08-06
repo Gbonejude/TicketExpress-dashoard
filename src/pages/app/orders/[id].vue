@@ -1,4 +1,6 @@
 <script setup>
+import { notify } from '@/utils/toast'
+
 definePage({
   meta: {
     action: 'read',
@@ -14,10 +16,6 @@ const orderId = route.params.id
 
 const activeTab = ref('items')
 const isSubmitting = ref(false)
-
-const snackbar = ref(false)
-const snackText = ref('')
-const snackColor = ref('success')
 
 /* ─────────────────────────────────────────────────────────────────────────
  * Order detail (eager-loads items.ticketType + tickets — confirmed backend)
@@ -51,12 +49,6 @@ const ticketStatusColor = status => ({
 
 const goBack = () => router.push('/orders')
 
-const notify = (text, color = 'success') => {
-  snackText.value = text
-  snackColor.value = color
-  snackbar.value = true
-}
-
 /* ─────────────────────────────────────────────────────────────────────────
  * Tables
  * ────────────────────────────────────────────────────────────────────── */
@@ -66,6 +58,32 @@ const itemHeaders = [
   { title: 'Prix unitaire', key: 'unitPrice' },
   { title: 'Sous-total', key: 'subtotal' },
 ]
+
+/**
+ * L'événement de la commande et son organisateur.
+ *
+ * Lus sur les lignes : c'est le type de billet qui porte l'événement. Une
+ * commande n'en concerne qu'un en pratique — la page passe par un événement —
+ * mais on affiche le décompte si les données en contiennent plusieurs, plutôt
+ * que d'en choisir un au hasard.
+ */
+const orderEvents = computed(() => {
+  const seen = new Map()
+
+  for (const item of items.value) {
+    const event = item.ticketType?.event
+    if (!event?.title || seen.has(event.title)) continue
+
+    seen.set(event.title, {
+      title: event.title,
+      organizer: event.organizer?.companyName ?? null,
+      venue: event.venue?.name ?? null,
+      city: event.venue?.city ?? null,
+    })
+  }
+
+  return [...seen.values()]
+})
 
 const ticketHeaders = [
   { title: 'N° billet', key: 'ticketNumber' },
@@ -92,7 +110,6 @@ const checkInTicket = async ticket => {
     isSubmitting.value = false
   }
 }
-
 </script>
 
 <template>
@@ -189,6 +206,32 @@ const checkInTicket = async ticket => {
                 />
                 <span>{{ order.deliveryMethodLabel ?? '-' }}</span>
               </div>
+
+              <!--
+                L'événement et son organisateur : ce qu'on cherche en ouvrant
+                une commande, avant même son contenu détaillé. 
+              -->
+              <div
+                v-for="event in orderEvents"
+                :key="event.title"
+                class="d-flex align-center gap-2"
+              >
+                <VIcon
+                  icon="tabler-calendar-event"
+                  size="18"
+                />
+                <span>
+                  <span class="font-weight-medium">{{ event.title }}</span>
+                  <span
+                    v-if="event.organizer"
+                    class="text-medium-emphasis"
+                  > · {{ event.organizer }}</span>
+                  <span
+                    v-if="event.venue"
+                    class="text-medium-emphasis"
+                  > · {{ event.venue }}<template v-if="event.city">, {{ event.city }}</template></span>
+                </span>
+              </div>
             </div>
           </div>
         </div>
@@ -203,7 +246,7 @@ const checkInTicket = async ticket => {
             start
             icon="tabler-list-details"
           />
-          Articles
+          Billets commandés
         </VTab>
         <VTab value="tickets">
           <VIcon
@@ -220,7 +263,7 @@ const checkInTicket = async ticket => {
         v-model="activeTab"
         class="disable-tab-transition"
       >
-        <!-- ═══ Articles ══════════════════════════════════════════════════ -->
+        <!-- ═══ Billets commandés ═════════════════════════════════════════ -->
         <VWindowItem value="items">
           <VDataTable
             :headers="itemHeaders"
@@ -323,13 +366,5 @@ const checkInTicket = async ticket => {
         </VWindowItem>
       </VWindow>
     </VCard>
-
-    <VSnackbar
-      v-model="snackbar"
-      :color="snackColor"
-      location="top end"
-    >
-      {{ snackText }}
-    </VSnackbar>
   </div>
 </template>

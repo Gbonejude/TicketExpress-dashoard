@@ -15,7 +15,7 @@ const roleLabels = {
   'super-admin': 'Super administrateur',
   'admin': 'Administrateur',
   'organizer-manager': 'Organisateur',
-  'client': 'Client',
+  'participant': 'Participant',
 }
 
 const user = computed(() => userData.value ?? {})

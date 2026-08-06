@@ -1,4 +1,8 @@
 <script setup>
+import { notify, notifyApiError } from '@/utils/toast'
+
+import { formatDateFr } from '@/utils/dateFormat'
+
 definePage({
   meta: {
     action: 'read',
@@ -40,6 +44,7 @@ const form = reactive({
 
 const headers = [
   { title: 'Code', key: 'code' },
+  { title: 'Événement', key: 'events', sortable: false },
   { title: 'Type', key: 'type' },
   { title: 'Valeur', key: 'value' },
   { title: 'Utilisation', key: 'usage', sortable: false },
@@ -47,6 +52,26 @@ const headers = [
   { title: 'Statut', key: 'isActive' },
   { title: 'Actions', key: 'actions', sortable: false },
 ]
+
+/**
+ * Un coupon peut viser des événements précis, ou aucun — auquel cas il vaut pour
+ * tout le catalogue. C'est une différence de portée importante : « Tous les
+ * événements » se dit, il ne se déduit pas d'une cellule vide.
+ */
+const couponEvents = coupon => {
+  const titles = (coupon.events ?? []).map(event => event.title).filter(Boolean)
+
+  return { titles, all: titles.length === 0 }
+}
+
+// ─── Détail ──────────────────────────────────────────────────────────────────
+const isShowDialogOpen = ref(false)
+const shownCoupon = ref(null)
+
+const openShowDialog = coupon => {
+  shownCoupon.value = coupon
+  isShowDialogOpen.value = true
+}
 
 const typeOptions = [
   { title: 'Pourcentage', value: 'percent' },
@@ -138,6 +163,7 @@ const openEditDialog = async coupon => {
   isLoadingAssociations.value = true
   try {
     const detail = await $api(`/coupons/${coupon.id}`)
+
     form.event_ids = (detail?.data?.events ?? []).map(ev => ev.id)
   } catch {
     form.event_ids = []
@@ -175,9 +201,11 @@ const saveCoupon = async () => {
       await $api('/coupons', { method: 'POST', body: payload })
     }
     isFormDialogOpen.value = false
+    notify(editingCoupon.value ? 'Coupon mis à jour.' : 'Coupon créé.')
     fetchCoupons()
   } catch (error) {
     const errors = error?.data?.errors ?? error?._data?.errors
+    if (!errors) notifyApiError(error, "Impossible d'enregistrer le coupon.")
     if (errors) {
       fieldErrors.code = errors.code?.[0]
       fieldErrors.type = errors.type?.[0]
@@ -197,7 +225,10 @@ const confirmDelete = async () => {
   try {
     await $api(`/coupons/${deletingCoupon.value.id}`, { method: 'DELETE' })
     isDeleteDialogOpen.value = false
+    notify('Coupon supprimé.')
     fetchCoupons()
+  } catch (error) {
+    notifyApiError(error, 'Impossible de supprimer le coupon.')
   } finally {
     isSubmitting.value = false
   }
@@ -210,8 +241,8 @@ const confirmDelete = async () => {
       <VCardTitle class="d-flex align-center justify-space-between pa-4">
         <span class="text-h6">Gestion des Coupons</span>
         <VBtn
-          color="primary"
           v-if="$can('create', 'coupons')"
+          color="primary"
           prepend-icon="tabler-plus"
           @click="openCreateDialog"
         >
@@ -239,7 +270,7 @@ const confirmDelete = async () => {
         :items-per-page="15"
         :page="currentPage"
         :loading="isFetching"
-        :no-data-text="'Aucun coupon'"
+        no-data-text="Aucun coupon"
         class="text-no-wrap"
         @update:options="onTableOptions"
       >
@@ -253,6 +284,32 @@ const confirmDelete = async () => {
           >
             {{ item.code }}
           </VChip>
+        </template>
+
+        <!-- Événement -->
+        <template #item.events="{ item }">
+          <VChip
+            v-if="couponEvents(item).all"
+            size="small"
+            color="info"
+            variant="tonal"
+          >
+            Tous les événements
+          </VChip>
+          <template v-else>
+            <div
+              class="text-body-2 text-truncate"
+              style="max-width: 220px"
+            >
+              {{ couponEvents(item).titles[0] }}
+            </div>
+            <div
+              v-if="couponEvents(item).titles.length > 1"
+              class="text-caption text-medium-emphasis"
+            >
+              +{{ couponEvents(item).titles.length - 1 }} autre(s)
+            </div>
+          </template>
         </template>
 
         <!-- Type -->
@@ -281,9 +338,17 @@ const confirmDelete = async () => {
           </div>
         </template>
 
-        <!-- Validité -->
+        <!--
+          Validité : même rendu sur deux lignes que les dates de Gestion des
+          Événements. 
+        -->
         <template #item.validity="{ item }">
-          <span>{{ item.startDate?.human ?? '-' }} → {{ item.endDate?.human ?? '-' }}</span>
+          <div class="text-body-2">
+            {{ formatDateFr(item.startDate) }}
+          </div>
+          <div class="text-caption text-medium-emphasis">
+            → {{ formatDateFr(item.endDate) }}
+          </div>
         </template>
 
         <!-- Statut -->
@@ -299,7 +364,28 @@ const confirmDelete = async () => {
 
         <!-- Actions -->
         <template #item.actions="{ item }">
-          <VTooltip text="Modifier" location="top">
+          <VTooltip
+            text="Voir"
+            location="top"
+          >
+            <template #activator="{ props }">
+              <VBtn
+                v-bind="props"
+                icon
+                variant="text"
+                size="small"
+                color="default"
+                @click="openShowDialog(item)"
+              >
+                <VIcon icon="tabler-eye" />
+              </VBtn>
+            </template>
+          </VTooltip>
+
+          <VTooltip
+            text="Modifier"
+            location="top"
+          >
             <template #activator="{ props }">
               <VBtn
                 v-bind="props"
@@ -314,7 +400,10 @@ const confirmDelete = async () => {
             </template>
           </VTooltip>
 
-          <VTooltip text="Supprimer" location="top">
+          <VTooltip
+            text="Supprimer"
+            location="top"
+          >
             <template #activator="{ props }">
               <VBtn
                 v-bind="props"
@@ -331,6 +420,101 @@ const confirmDelete = async () => {
         </template>
       </VDataTableServer>
     </VCard>
+
+    <!-- ─── Dialog Détail ───────────────────────────────────────────────────── -->
+    <VDialog
+      v-model="isShowDialogOpen"
+      max-width="560"
+    >
+      <VCard :title="`Coupon ${shownCoupon?.code ?? ''}`">
+        <VCardText class="pt-2">
+          <VList
+            density="compact"
+            class="py-0"
+          >
+            <VListItem>
+              <VListItemTitle class="text-body-2 text-medium-emphasis">
+                Réduction
+              </VListItemTitle>
+              <VListItemSubtitle class="text-body-1">
+                {{ shownCoupon?.typeLabel }} ·
+                {{ shownCoupon?.type === 'percent'
+                  ? `${shownCoupon?.value} %`
+                  : formatPrice(shownCoupon?.value) }}
+              </VListItemSubtitle>
+            </VListItem>
+
+            <VListItem>
+              <VListItemTitle class="text-body-2 text-medium-emphasis">
+                Utilisation
+              </VListItemTitle>
+              <VListItemSubtitle class="text-body-1">
+                {{ shownCoupon?.usedCount }} / {{ shownCoupon?.maxUsage }}
+                ({{ shownCoupon?.remainingUsage }} restante(s))
+              </VListItemSubtitle>
+            </VListItem>
+
+            <VListItem>
+              <VListItemTitle class="text-body-2 text-medium-emphasis">
+                Validité
+              </VListItemTitle>
+              <VListItemSubtitle class="text-body-1">
+                {{ formatDateFr(shownCoupon?.startDate) }}
+                → {{ formatDateFr(shownCoupon?.endDate) }}
+              </VListItemSubtitle>
+            </VListItem>
+
+            <VListItem>
+              <VListItemTitle class="text-body-2 text-medium-emphasis">
+                Statut
+              </VListItemTitle>
+              <VListItemSubtitle>
+                <VChip
+                  size="small"
+                  :color="shownCoupon?.isActive ? 'success' : 'secondary'"
+                  variant="tonal"
+                >
+                  {{ shownCoupon?.isActive ? 'Actif' : 'Inactif' }}
+                </VChip>
+              </VListItemSubtitle>
+            </VListItem>
+
+            <VListItem>
+              <VListItemTitle class="text-body-2 text-medium-emphasis">
+                Événements concernés
+              </VListItemTitle>
+              <VListItemSubtitle>
+                <template v-if="shownCoupon && couponEvents(shownCoupon).all">
+                  <span class="text-body-1">Tous les événements</span>
+                </template>
+                <ul
+                  v-else
+                  class="ps-4"
+                >
+                  <li
+                    v-for="title in couponEvents(shownCoupon ?? {}).titles"
+                    :key="title"
+                    class="text-body-1"
+                  >
+                    {{ title }}
+                  </li>
+                </ul>
+              </VListItemSubtitle>
+            </VListItem>
+          </VList>
+        </VCardText>
+
+        <VCardActions class="justify-end pa-4">
+          <VBtn
+            variant="tonal"
+            color="secondary"
+            @click="isShowDialogOpen = false"
+          >
+            Fermer
+          </VBtn>
+        </VCardActions>
+      </VCard>
+    </VDialog>
 
     <!-- ─── Dialog Créer / Modifier ─────────────────────────────────────────── -->
     <VDialog

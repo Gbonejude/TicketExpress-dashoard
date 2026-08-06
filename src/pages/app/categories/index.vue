@@ -1,4 +1,8 @@
 <script setup>
+import { notify, notifyApiError } from '@/utils/toast'
+
+import { formatDateFr } from '@/utils/dateFormat'
+
 definePage({
   meta: {
     action: 'read',
@@ -15,6 +19,7 @@ const deletingCategory = ref(null)
 const isSubmitting = ref(false)
 const formRef = ref(null)
 const slugTouched = ref(false)
+
 const fieldErrors = reactive({
   name: undefined,
   slug: undefined,
@@ -124,6 +129,7 @@ const saveCategory = async () => {
       await useApi('/categories').post(payload).json()
     }
     isFormDialogOpen.value = false
+    notify(editingCategory.value ? 'Catégorie mise à jour.' : 'Catégorie créée.')
     fetchCategories()
   } catch (error) {
     const errors = error?.data?.errors ?? error?._data?.errors
@@ -141,7 +147,10 @@ const confirmDelete = async () => {
   try {
     await useApi(`/categories/${deletingCategory.value.id}`).delete().json()
     isDeleteDialogOpen.value = false
+    notify('Catégorie supprimée.')
     fetchCategories()
+  } catch (error) {
+    notifyApiError(error, 'Impossible de supprimer la catégorie.')
   } finally {
     isSubmitting.value = false
   }
@@ -154,8 +163,8 @@ const confirmDelete = async () => {
       <VCardTitle class="d-flex align-center justify-space-between pa-4">
         <span class="text-h6">Gestion des Catégories</span>
         <VBtn
-          color="primary"
           v-if="$can('create', 'categories')"
+          color="primary"
           prepend-icon="tabler-plus"
           @click="openCreateDialog"
         >
@@ -183,7 +192,7 @@ const confirmDelete = async () => {
         :items-per-page="15"
         :page="currentPage"
         :loading="isFetching"
-        :no-data-text="'Aucune catégorie'"
+        no-data-text="Aucune catégorie"
         class="text-no-wrap"
         @update:options="onTableOptions"
       >
@@ -211,12 +220,15 @@ const confirmDelete = async () => {
 
         <!-- Créée le -->
         <template #item.createdAt="{ item }">
-          {{ item.createdAt?.human ?? '-' }}
+          {{ formatDateFr(item.createdAt) }}
         </template>
 
         <!-- Actions -->
         <template #item.actions="{ item }">
-          <VTooltip text="Modifier" location="top">
+          <VTooltip
+            text="Modifier"
+            location="top"
+          >
             <template #activator="{ props }">
               <VBtn
                 v-bind="props"
@@ -231,7 +243,10 @@ const confirmDelete = async () => {
             </template>
           </VTooltip>
 
-          <VTooltip text="Supprimer" location="top">
+          <VTooltip
+            text="Supprimer"
+            location="top"
+          >
             <template #activator="{ props }">
               <VBtn
                 v-bind="props"
