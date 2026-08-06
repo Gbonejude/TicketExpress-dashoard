@@ -1,4 +1,7 @@
 <script setup>
+import { notify, notifyApiError } from '@/utils/toast'
+import { formatDateFr } from '@/utils/dateFormat'
+
 definePage({
   meta: {
     action: 'read',
@@ -8,7 +11,28 @@ definePage({
 
 import { $api } from '@/utils/api'
 
+/**
+ * Gestion des Retraits.
+ *
+ * Le principe de l'écran : on ne demande jamais un montant à l'aveugle, et on ne
+ * propose jamais une action que le circuit refuse.
+ *
+ * - Le solde disponible de l'organisateur est affiché dans le formulaire, dès
+ *   qu'il est choisi (endpoint `withdrawals/earnings`, qui existait mais que
+ *   personne n'appelait). Les demandes déjà en attente en sont déduites.
+ * - Les statuts proposés au traitement viennent de `nextStatuses`, calculé par le
+ *   domaine : un retrait payé n'offre plus rien, et « payé » n'apparaît qu'après
+ *   approbation.
+ */
 const currentPage = ref(1)
+const search = ref('')
+const statusFilter = ref(null)
+
+// Pas de filtre « organisateur » : la recherche porte déjà sur son nom (et sur le
+// numéro du demandeur). Un select en doublon aurait surtout obligé à charger la
+// liste complète des organisateurs à l'ouverture de la page.
+const methodFilter = ref(null)
+
 const isFormDialogOpen = ref(false)
 const isProcessDialogOpen = ref(false)
 const isDeleteDialogOpen = ref(false)
@@ -16,53 +40,94 @@ const processingWithdrawal = ref(null)
 const deletingWithdrawal = ref(null)
 const isSubmitting = ref(false)
 const formErrors = ref({})
-const processError = ref('')
-const deleteError = ref('')
 const refForm = ref()
 const refProcessForm = ref()
 
 const form = reactive({
-  organizer_id: '',
+  organizerId: '',
+  requesterPhone: '',
   amount: null,
-  payment_method: '',
+  paymentMethod: '',
 })
 
 const processForm = reactive({
   status: '',
+  notes: '',
+  payoutReference: '',
 })
+
+/** La référence n'est demandée — et exigée — que pour clore un retrait. */
+const isMarkingPaid = computed(() => processForm.status === 'paid')
 
 const headers = [
   { title: 'Organisateur', key: 'organizer' },
+  { title: 'Téléphone', key: 'requesterPhone' },
   { title: 'Montant', key: 'amount' },
   { title: 'Méthode', key: 'paymentMethod' },
   { title: 'Statut', key: 'status' },
   { title: 'Demandé le', key: 'createdAt' },
+  { title: 'Traité', key: 'processed', sortable: false },
   { title: 'Actions', key: 'actions', sortable: false },
 ]
 
-const processStatusOptions = [
+const statusOptions = [
+  { title: 'En attente', value: 'pending' },
   { title: 'Approuvé', value: 'approved' },
-  { title: 'Rejeté', value: 'rejected' },
   { title: 'Payé', value: 'paid' },
+  { title: 'Rejeté', value: 'rejected' },
 ]
+
+const paymentMethodOptions = [
+  { title: 'Flooz (Moov Money)', value: 'flooz' },
+  { title: 'Mix by Yas', value: 'tmoney' },
+]
+
+const debouncedSearch = ref('')
+let searchTimer = null
+
+watch(search, value => {
+  clearTimeout(searchTimer)
+  searchTimer = setTimeout(() => { debouncedSearch.value = value }, 400)
+})
 
 const apiUrl = computed(() => {
   const params = new URLSearchParams({ page: String(currentPage.value) })
+  if (statusFilter.value) params.set('status', statusFilter.value)
+  if (methodFilter.value) params.set('payment_method', methodFilter.value)
+  if (debouncedSearch.value) params.set('search', debouncedSearch.value)
 
   return `/withdrawals?${params.toString()}`
 })
+
+watch([statusFilter, methodFilter, debouncedSearch], () => { currentPage.value = 1 })
 
 const { data: withdrawalsData, isFetching, execute: fetchWithdrawals } = useApi(apiUrl)
 
 const withdrawals = computed(() => withdrawalsData.value?.data ?? [])
 const totalWithdrawals = computed(() => withdrawalsData.value?.meta?.total ?? 0)
 
+/** Totaux par statut, calculés par l'API sur l'ensemble filtré. */
+const stats = computed(() => withdrawalsData.value?.stats ?? {})
+
+const statCards = computed(() => [
+  { key: 'pending', icon: 'tabler-clock', color: 'warning' },
+  { key: 'approved', icon: 'tabler-circle-check', color: 'info' },
+  { key: 'paid', icon: 'tabler-cash', color: 'success' },
+  { key: 'rejected', icon: 'tabler-ban', color: 'error' },
+].map(card => ({
+  ...card,
+  label: stats.value[card.key]?.label ?? card.key,
+  count: stats.value[card.key]?.count ?? 0,
+  total: stats.value[card.key]?.total ?? 0,
+})))
+
 const onTableOptions = ({ page }) => {
   if (page && page !== currentPage.value) currentPage.value = page
 }
 
-// Organizers for the "Organisateur" select
-const { data: organizersData, execute: fetchOrganizers } = useApi('/organizers?page=1')
+// 100 par page : la liste déroulante doit contenir tous les organisateurs, pas
+// seulement les 15 de la première page.
+const { data: organizersData, execute: fetchOrganizers } = useApi('/organizers?page=1&per_page=100')
 
 const organizers = computed(() => organizersData.value?.data ?? [])
 
@@ -76,17 +141,48 @@ const statusColor = status => ({
   rejected: 'error',
 })[status] ?? 'secondary'
 
-// Only pending/approved withdrawals can still be processed (paid/rejected are final states).
-const canProcess = item => item.status === 'pending' || item.status === 'approved'
+// Les actions suivent ce que le domaine autorise, pas une liste de statuts
+// recopiée dans la page.
+const canProcess = item => (item.nextStatuses?.length ?? 0) > 0
+const canDelete = item => item.status === 'pending' && !item.processedAt
 
-// Backend only allows deleting withdrawals still in "pending" state.
-const canDelete = item => item.status === 'pending'
+/* ─── Solde de l'organisateur choisi ────────────────────────────────────────── */
+const balance = ref(null)
+const isBalanceLoading = ref(false)
 
+const loadBalance = async organizerId => {
+  balance.value = null
+  if (!organizerId) return
+
+  isBalanceLoading.value = true
+  try {
+    const res = await $api(`/withdrawals/earnings/${organizerId}`)
+
+    balance.value = res?.data ?? null
+  } catch {
+    // Un solde indisponible ne doit pas bloquer la saisie : l'API refusera de
+    // toute façon un montant trop élevé.
+    balance.value = null
+  } finally {
+    isBalanceLoading.value = false
+  }
+}
+
+watch(() => form.organizerId, id => loadBalance(id))
+
+const available = computed(() => Number(balance.value?.availableBalance ?? 0))
+
+const exceedsBalance = computed(() =>
+  balance.value !== null && Number(form.amount ?? 0) > available.value)
+
+/* ─── Créer ─────────────────────────────────────────────────────────────────── */
 const resetForm = () => {
-  form.organizer_id = ''
+  form.organizerId = ''
+  form.requesterPhone = ''
   form.amount = null
-  form.payment_method = ''
+  form.paymentMethod = ''
   formErrors.value = {}
+  balance.value = null
   refForm.value?.resetValidation()
 }
 
@@ -103,21 +199,36 @@ const saveWithdrawal = async () => {
   isSubmitting.value = true
   formErrors.value = {}
   try {
-    await $api('/withdrawals', { method: 'POST', body: { ...form } })
+    await $api('/withdrawals', {
+      method: 'POST',
+      body: {
+        'organizer_id': form.organizerId,
+        'requester_phone': form.requesterPhone,
+        amount: form.amount,
+        'payment_method': form.paymentMethod,
+      },
+    })
     isFormDialogOpen.value = false
+    notify('Demande de retrait créée.')
     fetchWithdrawals()
   } catch (error) {
-    if (error?.data?.errors) formErrors.value = error.data.errors
-    else if (error?._data?.errors) formErrors.value = error._data.errors
+    const data = error?.data ?? error?._data
+    if (data?.errors) formErrors.value = data.errors
+    else notifyApiError(error, 'Impossible de créer la demande.')
   } finally {
     isSubmitting.value = false
   }
 }
 
+/* ─── Traiter ───────────────────────────────────────────────────────────────── */
 const openProcessDialog = item => {
   processingWithdrawal.value = item
-  processForm.status = item.status === 'pending' ? 'approved' : 'paid'
-  processError.value = ''
+
+  // Premier statut atteignable : approuver depuis « en attente », payer depuis
+  // « approuvé ». Le rejet reste un choix explicite.
+  processForm.status = item.nextStatuses?.[0]?.value ?? ''
+  processForm.notes = item.notes ?? ''
+  processForm.payoutReference = item.payoutReference ?? ''
   refProcessForm.value?.resetValidation()
   isProcessDialogOpen.value = true
 }
@@ -127,36 +238,40 @@ const confirmProcess = async () => {
   if (!valid) return
 
   isSubmitting.value = true
-  processError.value = ''
   try {
     await $api(`/withdrawals/${processingWithdrawal.value.id}/process`, {
       method: 'POST',
-      body: { status: processForm.status },
+      body: {
+        status: processForm.status,
+        notes: processForm.notes || null,
+        'payout_reference': isMarkingPaid.value ? processForm.payoutReference : null,
+      },
     })
     isProcessDialogOpen.value = false
+    notify('Retrait traité.')
     fetchWithdrawals()
   } catch (error) {
-    processError.value = error?.data?.message ?? error?._data?.message ?? 'Une erreur est survenue.'
+    notifyApiError(error, 'Impossible de traiter la demande.')
   } finally {
     isSubmitting.value = false
   }
 }
 
+/* ─── Supprimer ─────────────────────────────────────────────────────────────── */
 const openDeleteDialog = item => {
   deletingWithdrawal.value = item
-  deleteError.value = ''
   isDeleteDialogOpen.value = true
 }
 
 const confirmDelete = async () => {
   isSubmitting.value = true
-  deleteError.value = ''
   try {
     await $api(`/withdrawals/${deletingWithdrawal.value.id}`, { method: 'DELETE' })
     isDeleteDialogOpen.value = false
+    notify('Demande supprimée.')
     fetchWithdrawals()
   } catch (error) {
-    deleteError.value = error?.data?.message ?? error?._data?.message ?? 'Une erreur est survenue.'
+    notifyApiError(error, 'Impossible de supprimer la demande.')
   } finally {
     isSubmitting.value = false
   }
@@ -165,6 +280,41 @@ const confirmDelete = async () => {
 
 <template>
   <div>
+    <!-- ─── Totaux par statut ────────────────────────────────────────────────── -->
+    <VRow class="mb-2">
+      <VCol
+        v-for="card in statCards"
+        :key="card.key"
+        cols="12"
+        sm="6"
+        md="3"
+      >
+        <VCard>
+          <VCardText class="d-flex align-center gap-4">
+            <VAvatar
+              :color="card.color"
+              variant="tonal"
+              rounded
+              size="42"
+            >
+              <VIcon :icon="card.icon" />
+            </VAvatar>
+            <div>
+              <div class="text-body-2 text-medium-emphasis">
+                {{ card.label }}
+              </div>
+              <div class="text-h6">
+                {{ card.count }}
+              </div>
+              <div class="text-caption text-medium-emphasis">
+                {{ formatPrice(card.total) }}
+              </div>
+            </div>
+          </VCardText>
+        </VCard>
+      </VCol>
+    </VRow>
+
     <VCard>
       <VCardTitle class="d-flex align-center justify-space-between pa-4">
         <span class="text-h6">Gestion des Retraits</span>
@@ -178,6 +328,54 @@ const confirmDelete = async () => {
       </VCardTitle>
 
       <VDivider />
+
+      <VCardText>
+        <VRow>
+          <VCol
+            cols="12"
+            md="6"
+          >
+            <VTextField
+              v-model="search"
+              label="Rechercher"
+              placeholder="Organisateur ou numéro du demandeur…"
+              prepend-inner-icon="tabler-search"
+              density="compact"
+              clearable
+            />
+          </VCol>
+          <VCol
+            cols="12"
+            md="3"
+          >
+            <VSelect
+              v-model="statusFilter"
+              :items="statusOptions"
+              item-title="title"
+              item-value="value"
+              label="Statut"
+              placeholder="Tous"
+              density="compact"
+              clearable
+            />
+          </VCol>
+          <VCol
+            cols="12"
+            md="3"
+          >
+            <VSelect
+              v-model="methodFilter"
+              :items="paymentMethodOptions"
+              item-title="title"
+              item-value="value"
+              label="Méthode"
+              placeholder="Toutes"
+              density="compact"
+              clearable
+            />
+          </VCol>
+        </VRow>
+      </VCardText>
 
       <VDataTableServer
         :headers="headers"
@@ -195,14 +393,26 @@ const confirmDelete = async () => {
           <span class="font-weight-medium">{{ item.organizer?.companyName ?? '-' }}</span>
         </template>
 
-        <!-- Montant -->
-        <template #item.amount="{ item }">
-          {{ formatPrice(item.amount) }}
+        <!-- Telephone -->
+        <template #item.requesterPhone="{ item }">
+          {{ item.requesterPhone ?? '-' }}
         </template>
 
-        <!-- Méthode -->
+        <!-- Montant : puce à la couleur du statut, comme sur les paiements. -->
+        <template #item.amount="{ item }">
+          <VChip
+            :color="statusColor(item.status)"
+            size="small"
+            variant="tonal"
+            class="font-weight-medium"
+          >
+            {{ formatPrice(item.amount) }}
+          </VChip>
+        </template>
+
+        <!-- Méthode : le libellé, pas « flooz » en minuscules. -->
         <template #item.paymentMethod="{ item }">
-          {{ item.paymentMethod ?? '-' }}
+          {{ item.paymentMethodLabel ?? item.paymentMethod ?? '-' }}
         </template>
 
         <!-- Statut -->
@@ -218,7 +428,44 @@ const confirmDelete = async () => {
 
         <!-- Demandé le -->
         <template #item.createdAt="{ item }">
-          {{ item.createdAt?.human ?? '-' }}
+          {{ formatDateFr(item.createdAt) }}
+        </template>
+
+        <!-- Traité : par qui, quand, et le motif s'il y en a un. -->
+        <template #item.processed="{ item }">
+          <template v-if="item.processedAt">
+            <div class="text-body-2">
+              {{ item.processedBy ?? 'Administration' }}
+            </div>
+            <div class="text-caption text-medium-emphasis">
+              {{ formatDateFr(item.processedAt) }}
+            </div>
+            <div
+              v-if="item.payoutReference"
+              class="text-caption text-medium-emphasis"
+              style="font-family: monospace"
+            >
+              {{ item.payoutReference }}
+            </div>
+            <VTooltip
+              v-if="item.notes"
+              :text="item.notes"
+              location="top"
+            >
+              <template #activator="{ props }">
+                <VIcon
+                  v-bind="props"
+                  icon="tabler-message-2"
+                  size="16"
+                  class="text-medium-emphasis"
+                />
+              </template>
+            </VTooltip>
+          </template>
+          <span
+            v-else
+            class="text-medium-emphasis"
+          >—</span>
         </template>
 
         <!-- Actions -->
@@ -260,6 +507,11 @@ const confirmDelete = async () => {
               </VBtn>
             </template>
           </VTooltip>
+
+          <span
+            v-if="!canProcess(item) && !canDelete(item)"
+            class="text-medium-emphasis"
+          >—</span>
         </template>
       </VDataTableServer>
     </VCard>
@@ -276,13 +528,57 @@ const confirmDelete = async () => {
             <VRow>
               <VCol cols="12">
                 <VSelect
-                  v-model="form.organizer_id"
+                  v-model="form.organizerId"
                   :items="organizers"
                   item-title="companyName"
                   item-value="id"
                   label="Organisateur"
                   :rules="[requiredValidator]"
                   :error-messages="formErrors.organizer_id"
+                />
+              </VCol>
+
+              <!-- Le solde, avant de saisir un montant. -->
+              <VCol
+                v-if="form.organizerId"
+                cols="12"
+              >
+                <VAlert
+                  v-if="isBalanceLoading"
+                  type="info"
+                  variant="tonal"
+                  density="compact"
+                >
+                  Calcul du solde…
+                </VAlert>
+                <VAlert
+                  v-else-if="balance"
+                  :type="available > 0 ? 'success' : 'warning'"
+                  variant="tonal"
+                  density="compact"
+                >
+                  <div class="font-weight-medium">
+                    Solde disponible : {{ formatPrice(available) }}
+                  </div>
+                  <div class="text-caption">
+                    Revenu net {{ formatPrice(balance.netRevenue) }} ·
+                    déjà retiré {{ formatPrice(balance.totalWithdrawn) }} ·
+                    en attente {{ formatPrice(balance.pendingWithdrawn) }}
+                  </div>
+                </VAlert>
+              </VCol>
+
+              <VCol
+                cols="12"
+                md="6"
+              >
+                <VTextField
+                  v-model="form.requesterPhone"
+                  type="tel"
+                  label="Numéro du demandeur"
+                  placeholder="+22890112233"
+                  :rules="[requiredValidator]"
+                  :error-messages="formErrors.requester_phone"
                 />
               </VCol>
 
@@ -294,8 +590,15 @@ const confirmDelete = async () => {
                   v-model.number="form.amount"
                   type="number"
                   min="1"
+                  :max="balance ? available : undefined"
                   label="Montant (FCFA)"
-                  :rules="[requiredValidator, v => (v > 0) || 'Le montant doit être au moins 1.']"
+                  :hint="balance ? `Maximum ${formatPrice(available)}` : ''"
+                  persistent-hint
+                  :rules="[
+                    requiredValidator,
+                    v => (v > 0) || 'Le montant doit être au moins 1.',
+                    () => !exceedsBalance || `Le solde disponible est de ${formatPrice(available)}.`,
+                  ]"
                   :error-messages="formErrors.amount"
                 />
               </VCol>
@@ -304,11 +607,14 @@ const confirmDelete = async () => {
                 cols="12"
                 md="6"
               >
-                <VTextField
-                  v-model="form.payment_method"
+                <VSelect
+                  v-model="form.paymentMethod"
+                  :items="paymentMethodOptions"
+                  item-title="title"
+                  item-value="value"
                   label="Méthode de paiement"
-                  placeholder="Ex : bank_transfer, mobile_money"
-                  :rules="[requiredValidator, v => (v ?? '').length <= 255 || 'Ne doit pas dépasser 255 caractères']"
+                  placeholder="Choisir Flooz ou Mix by Yas"
+                  :rules="[requiredValidator]"
                   :error-messages="formErrors.payment_method"
                 />
               </VCol>
@@ -327,6 +633,7 @@ const confirmDelete = async () => {
           <VBtn
             color="primary"
             :loading="isSubmitting"
+            :disabled="exceedsBalance"
             @click="saveWithdrawal"
           >
             Créer la demande
@@ -335,39 +642,65 @@ const confirmDelete = async () => {
       </VCard>
     </VDialog>
 
-    <!-- ─── Dialog Traiter (process) ────────────────────────────────────────── -->
+    <!-- ─── Dialog Traiter ──────────────────────────────────────────────────── -->
     <VDialog
       v-model="isProcessDialogOpen"
-      max-width="400"
+      max-width="480"
     >
       <VCard title="Traiter la demande de retrait">
         <VCardText class="pt-4">
-          <p class="text-body-2 mb-4">
-            Organisateur :
-            <strong>{{ processingWithdrawal?.organizer?.companyName }}</strong>
-            — Montant : <strong>{{ formatPrice(processingWithdrawal?.amount) }}</strong>
-          </p>
+          <!-- La destination du virement, en évidence : c'est ce numéro que
+               l'organisateur a renseigné, et c'est sur lui que l'argent doit
+               partir. Le lire au moment de décider évite de payer le bon montant
+               au mauvais compte. -->
+          <VAlert
+            type="info"
+            variant="tonal"
+            density="compact"
+            class="mb-4"
+          >
+            <div class="font-weight-medium">
+              {{ formatPrice(processingWithdrawal?.amount) }}
+              → {{ processingWithdrawal?.requesterPhone }}
+            </div>
+            <div class="text-caption">
+              {{ processingWithdrawal?.paymentMethodLabel }} ·
+              {{ processingWithdrawal?.organizer?.companyName }}
+            </div>
+          </VAlert>
 
           <VForm ref="refProcessForm">
+            <!-- Uniquement les statuts atteignables depuis l'état courant. -->
             <VSelect
               v-model="processForm.status"
-              :items="processStatusOptions"
-              item-title="title"
+              :items="processingWithdrawal?.nextStatuses ?? []"
+              item-title="label"
               item-value="value"
               label="Nouveau statut"
               :rules="[requiredValidator]"
             />
-          </VForm>
 
-          <VAlert
-            v-if="processError"
-            type="error"
-            variant="tonal"
-            density="compact"
-            class="mt-2"
-          >
-            {{ processError }}
-          </VAlert>
+            <VTextField
+              v-if="isMarkingPaid"
+              v-model="processForm.payoutReference"
+              label="Référence du transfert"
+              placeholder="Identifiant rendu par Flooz / Mix by Yas"
+              class="mt-4"
+              :rules="[requiredValidator]"
+              persistent-hint
+              hint="Preuve du virement : à présenter si l'organisateur dit n'avoir rien reçu."
+            />
+
+            <VTextarea
+              v-model="processForm.notes"
+              label="Motif ou remarque"
+              placeholder="Raison du refus, précision interne…"
+              rows="2"
+              class="mt-4"
+              persistent-hint
+              hint="Conservé avec la demande, et lisible par l'organisateur."
+            />
+          </VForm>
         </VCardText>
 
         <VCardActions class="justify-end pa-4">
@@ -397,20 +730,11 @@ const confirmDelete = async () => {
       <VCard title="Supprimer la demande de retrait">
         <VCardText class="pt-4">
           <p class="text-body-2">
-            Êtes-vous sûr de vouloir supprimer la demande de retrait de
-            <strong>{{ deletingWithdrawal?.organizer?.companyName }}</strong> ?
+            Êtes-vous sûr de vouloir supprimer la demande de
+            <strong>{{ deletingWithdrawal?.organizer?.companyName }}</strong>
+            ({{ formatPrice(deletingWithdrawal?.amount) }}) ?
             Cette action est irréversible.
           </p>
-
-          <VAlert
-            v-if="deleteError"
-            type="error"
-            variant="tonal"
-            density="compact"
-            class="mt-2"
-          >
-            {{ deleteError }}
-          </VAlert>
         </VCardText>
 
         <VCardActions class="justify-end pa-4">

@@ -14,7 +14,6 @@ const screenLandingRoutes = [
   ['promotions', 'promotions'],
   ['tickets', 'tickets'],
   ['coupons', 'coupons'],
-  ['reviews', 'reviews'],
   ['categories', 'categories'],
   ['venues', 'venues'],
   ['organizers', 'organizers'],

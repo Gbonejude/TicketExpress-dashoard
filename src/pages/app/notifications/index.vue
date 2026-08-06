@@ -1,4 +1,6 @@
 <script setup>
+import { notify, notifyApiError } from '@/utils/toast'
+
 definePage({
   meta: {
     action: 'read',
@@ -13,27 +15,8 @@ definePage({
 // convention used elsewhere in the app. See the report for details.
 
 const currentPage = ref(1)
-const isFormDialogOpen = ref(false)
-const isDeleteDialogOpen = ref(false)
-const editingNotification = ref(null)
-const deletingNotification = ref(null)
 const isSubmitting = ref(false)
-const formRef = ref(null)
 const markingReadId = ref(null)
-
-const fieldErrors = reactive({
-  user_id: undefined,
-  title: undefined,
-  message: undefined,
-  type: undefined,
-})
-
-const form = reactive({
-  user_id: null,
-  title: '',
-  message: '',
-  type: 'info',
-})
 
 const headers = [
   { title: 'Titre', key: 'title' },
@@ -42,13 +25,6 @@ const headers = [
   { title: 'Lu', key: 'read' },
   { title: 'Date', key: 'createdAt' },
   { title: 'Actions', key: 'actions', sortable: false },
-]
-
-const typeOptions = [
-  { value: 'info', title: 'Info' },
-  { value: 'success', title: 'Succès' },
-  { value: 'warning', title: 'Avertissement' },
-  { value: 'error', title: 'Erreur' },
 ]
 
 const typeLabels = {
@@ -80,14 +56,6 @@ const onTableOptions = ({ page }) => {
   if (page && page !== currentPage.value) currentPage.value = page
 }
 
-// ─── Recipient options for the create form (GET /users) ────────────────────
-const { data: usersData } = useApi('/users')
-
-const userOptions = computed(() => (usersData.value?.data ?? []).map(u => ({
-  value: u.id,
-  title: u.email ? `${u.fullName} (${u.email})` : u.fullName,
-})))
-
 // ─── Date formatting (raw ISO strings here, not the { human } date object) ─
 const formatDate = value => {
   if (!value) return '-'
@@ -104,99 +72,14 @@ const formatDate = value => {
   })
 }
 
-// ─── Form helpers ────────────────────────────────────────────────────────
-const resetForm = () => {
-  form.user_id = null
-  form.title = ''
-  form.message = ''
-  form.type = 'info'
-  fieldErrors.user_id = undefined
-  fieldErrors.title = undefined
-  fieldErrors.message = undefined
-  fieldErrors.type = undefined
-  editingNotification.value = null
-  formRef.value?.resetValidation()
-}
-
-const openCreateDialog = () => {
-  resetForm()
-  isFormDialogOpen.value = true
-}
-
-const openEditDialog = notification => {
-  resetForm()
-  editingNotification.value = notification
-  form.title = notification.data?.title ?? ''
-  form.message = notification.data?.message ?? ''
-  form.type = notification.data?.type ?? 'info'
-  isFormDialogOpen.value = true
-}
-
-const openDeleteDialog = notification => {
-  deletingNotification.value = notification
-  isDeleteDialogOpen.value = true
-}
-
-const saveNotification = async () => {
-  const { valid } = await formRef.value.validate()
-  if (!valid) return
-
-  fieldErrors.user_id = undefined
-  fieldErrors.title = undefined
-  fieldErrors.message = undefined
-  fieldErrors.type = undefined
-  isSubmitting.value = true
-
-  const payload = editingNotification.value
-    ? {
-      title: form.title,
-      message: form.message,
-      type: form.type,
-    }
-    : {
-      user_id: form.user_id || undefined,
-      title: form.title,
-      message: form.message,
-      type: form.type,
-    }
-
-  try {
-    if (editingNotification.value) {
-      await useApi(`/notifications/${editingNotification.value.id}`).put(payload).json()
-    } else {
-      await useApi('/notifications').post(payload).json()
-    }
-    isFormDialogOpen.value = false
-    fetchNotifications()
-  } catch (error) {
-    const errors = error?.data?.errors ?? error?._data?.errors
-    if (errors) {
-      fieldErrors.user_id = errors.user_id?.[0]
-      fieldErrors.title = errors.title?.[0]
-      fieldErrors.message = errors.message?.[0]
-      fieldErrors.type = errors.type?.[0]
-    }
-  } finally {
-    isSubmitting.value = false
-  }
-}
-
-const confirmDelete = async () => {
-  isSubmitting.value = true
-  try {
-    await useApi(`/notifications/${deletingNotification.value.id}`).delete().json()
-    isDeleteDialogOpen.value = false
-    fetchNotifications()
-  } finally {
-    isSubmitting.value = false
-  }
-}
-
 const markAsRead = async notification => {
   markingReadId.value = notification.id
   try {
     await useApi(`/notifications/${notification.id}/markasread`).post().json()
+    notify('Notification marquée comme lue.')
     fetchNotifications()
+  } catch (error) {
+    notifyApiError(error, 'Impossible de marquer la notification.')
   } finally {
     markingReadId.value = null
   }
@@ -206,15 +89,16 @@ const markAsRead = async notification => {
 <template>
   <div>
     <VCard>
+      <!--
+        Ni ajout ni modification : une notification est émise par la plateforme
+        quand un événement métier se produit (commande payée, organisateur
+        approuvé…). En écrire une à la main depuis cet écran produirait un
+        message que rien n'a déclenché — et le back-end renvoie de toute façon
+        501 sur la mise à jour. L'écran reste en consultation, avec « marquer
+        comme lue ».
+      -->
       <VCardTitle class="d-flex align-center justify-space-between pa-4">
         <span class="text-h6">Gestion des Notifications</span>
-        <VBtn
-          color="primary"
-          prepend-icon="tabler-plus"
-          @click="openCreateDialog"
-        >
-          Ajouter une notification
-        </VBtn>
       </VCardTitle>
 
       <VDivider />
@@ -294,8 +178,10 @@ const markAsRead = async notification => {
             </template>
           </VTooltip>
 
-          <!-- Modifier / Supprimer volontairement absents : le back-end renvoie
-               501 (non implémenté) sur PUT/DELETE /notifications/{id}. -->
+          <!--
+            Modifier / Supprimer absents : le back-end renvoie 501 (non
+            implémenté) sur PUT et DELETE /notifications/{id}.
+          -->
           <span
             v-if="item.read_at"
             class="text-medium-emphasis"
@@ -303,79 +189,5 @@ const markAsRead = async notification => {
         </template>
       </VDataTableServer>
     </VCard>
-
-    <!-- ─── Dialog Créer / Modifier ─────────────────────────────────────────── -->
-    <VDialog
-      v-model="isFormDialogOpen"
-      max-width="640"
-      scrollable
-    >
-      <VCard :title="editingNotification ? 'Modifier la notification' : 'Ajouter une notification'">
-        <VCardText class="pt-4">
-          <VForm ref="formRef">
-            <VRow>
-              <VCol
-                v-if="!editingNotification"
-                cols="12"
-              >
-                <VSelect
-                  v-model="form.user_id"
-                  label="Destinataire (optionnel, vous par défaut)"
-                  :items="userOptions"
-                  clearable
-                  :error-messages="fieldErrors.user_id"
-                />
-              </VCol>
-              <VCol cols="12">
-                <VTextField
-                  v-model="form.title"
-                  label="Titre"
-                  :rules="[requiredValidator]"
-                  :error-messages="fieldErrors.title"
-                  required
-                />
-              </VCol>
-              <VCol cols="12">
-                <VTextarea
-                  v-model="form.message"
-                  label="Message"
-                  :rules="[requiredValidator]"
-                  :error-messages="fieldErrors.message"
-                  required
-                />
-              </VCol>
-              <VCol cols="12">
-                <VSelect
-                  v-model="form.type"
-                  label="Type"
-                  :items="typeOptions"
-                  :rules="[requiredValidator]"
-                  :error-messages="fieldErrors.type"
-                  required
-                />
-              </VCol>
-            </VRow>
-          </VForm>
-        </VCardText>
-
-        <VCardActions class="justify-end pa-4">
-          <VBtn
-            variant="tonal"
-            color="secondary"
-            @click="isFormDialogOpen = false"
-          >
-            Annuler
-          </VBtn>
-          <VBtn
-            color="primary"
-            :loading="isSubmitting"
-            @click="saveNotification"
-          >
-            {{ editingNotification ? 'Enregistrer les modifications' : 'Créer la notification' }}
-          </VBtn>
-        </VCardActions>
-      </VCard>
-    </VDialog>
-
   </div>
 </template>

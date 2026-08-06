@@ -14,11 +14,32 @@ export default [
     subject: 'events',
   },
   {
+    title: 'Événements en cours',
+    icon: { icon: 'tabler-broadcast' },
+    to: 'live-events',
+    action: 'read',
+    subject: 'events',
+  },
+  {
     title: 'Commandes',
     icon: { icon: 'tabler-shopping-cart' },
     to: 'orders',
     action: 'read',
     subject: 'bookings',
+  },
+  {
+    title: 'Participants',
+    icon: { icon: 'tabler-users' },
+    to: 'participants',
+    action: 'read',
+    subject: 'users',
+  },
+  {
+    title: 'Rapports & statistiques',
+    icon: { icon: 'tabler-report-analytics' },
+    to: 'reports',
+    action: 'read',
+    subject: 'dashboard',
   },
   {
     title: 'Paiements',
@@ -47,13 +68,6 @@ export default [
     to: 'coupons',
     action: 'read',
     subject: 'coupons',
-  },
-  {
-    title: 'Avis',
-    icon: { icon: 'tabler-star' },
-    to: 'reviews',
-    action: 'read',
-    subject: 'reviews',
   },
   {
     title: 'Catalogue',

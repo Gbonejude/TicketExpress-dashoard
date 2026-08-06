@@ -1,4 +1,6 @@
 <script setup>
+import { notify } from '@/utils/toast'
+
 definePage({
   meta: {
     action: 'read',
@@ -6,7 +8,10 @@ definePage({
   },
 })
 
+import { useAbility } from '@casl/vue'
 import { $api, toMediaUrl } from '@/utils/api'
+
+const { can } = useAbility()
 
 const search = ref('')
 const currentPage = ref(1)
@@ -23,16 +28,6 @@ const logoPreview = ref(null)
 const logoInputRef = ref(null)
 const formErrors = ref({})
 const refForm = ref()
-
-const snackbar = ref(false)
-const snackText = ref('')
-const snackColor = ref('success')
-
-const notify = (text, color = 'success') => {
-  snackText.value = text
-  snackColor.value = color
-  snackbar.value = true
-}
 
 const form = reactive({
   user_id: '',
@@ -260,9 +255,14 @@ const confirmDelete = async () => {
     <VCard>
       <VCardTitle class="d-flex align-center justify-space-between pa-4">
         <span class="text-h6">Gestion des Organisateurs</span>
-        <span class="text-caption text-medium-emphasis">
-          Les organisateurs s'inscrivent côté client — le back-office valide et gère leur accès.
-        </span>
+        <VBtn
+          v-if="can('create', 'Organizer')"
+          color="primary"
+          prepend-icon="tabler-plus"
+          @click="openCreateDialog"
+        >
+          Ajouter un organisateur
+        </VBtn>
       </VCardTitle>
 
       <VDivider />
@@ -683,12 +683,5 @@ const confirmDelete = async () => {
       </VCard>
     </VDialog>
 
-    <VSnackbar
-      v-model="snackbar"
-      :color="snackColor"
-      location="top end"
-    >
-      {{ snackText }}
-    </VSnackbar>
   </div>
 </template>

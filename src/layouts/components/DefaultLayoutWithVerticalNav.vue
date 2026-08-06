@@ -93,6 +93,7 @@ onMounted(() => {
       :color="rtColor"
       location="top end"
       :timeout="5000"
+      max-width="400"
     >
       <VIcon
         icon="tabler-bell-ringing"

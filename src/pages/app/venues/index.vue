@@ -1,4 +1,6 @@
 <script setup>
+import { notify, notifyApiError } from '@/utils/toast'
+
 definePage({
   meta: {
     action: 'read',
@@ -7,6 +9,7 @@ definePage({
 })
 
 const search = ref('')
+const eventFilter = ref(null)
 const currentPage = ref(1)
 const isFormDialogOpen = ref(false)
 const isDeleteDialogOpen = ref(false)
@@ -37,11 +40,18 @@ const headers = [
 const apiUrl = computed(() => {
   const params = new URLSearchParams({ page: String(currentPage.value) })
   if (search.value) params.set('search', search.value)
+  if (eventFilter.value) params.set('event_id', eventFilter.value)
 
   return `/venues?${params.toString()}`
 })
 
-watch(search, () => { currentPage.value = 1 })
+watch([search, eventFilter], () => { currentPage.value = 1 })
+
+// 100 par page : le select doit contenir tous les événements, pas les 15 de la
+// première page.
+const { data: eventsData } = useApi('/events?page=1&per_page=100')
+
+const eventOptions = computed(() => eventsData.value?.data ?? [])
 
 const { data: venuesData, isFetching, execute: fetchVenues } = useApi(apiUrl)
 
@@ -128,10 +138,12 @@ const saveVenue = async () => {
       await useApi('/venues').post(payload).json()
     }
     isFormDialogOpen.value = false
+    notify(editingVenue.value ? 'Lieu mis à jour.' : 'Lieu créé.')
     fetchVenues()
   } catch (error) {
-    if (error?.data?.errors) errors.value = error.data.errors
-    else if (error?._data?.errors) errors.value = error._data.errors
+    const payloadErrors = error?.data?.errors ?? error?._data?.errors
+    if (payloadErrors) errors.value = payloadErrors
+    else notifyApiError(error, "Impossible d'enregistrer le lieu.")
   } finally {
     isSubmitting.value = false
   }
@@ -142,7 +154,10 @@ const confirmDelete = async () => {
   try {
     await useApi(`/venues/${deletingVenue.value.id}`).delete().json()
     isDeleteDialogOpen.value = false
+    notify('Lieu supprimé.')
     fetchVenues()
+  } catch (error) {
+    notifyApiError(error, 'Impossible de supprimer le lieu.')
   } finally {
     isSubmitting.value = false
   }
@@ -155,8 +170,8 @@ const confirmDelete = async () => {
       <VCardTitle class="d-flex align-center justify-space-between pa-4">
         <span class="text-h6">Gestion des Lieux</span>
         <VBtn
-          color="primary"
           v-if="$can('create', 'venues')"
+          color="primary"
           prepend-icon="tabler-plus"
           @click="openCreateDialog"
         >
@@ -167,14 +182,40 @@ const confirmDelete = async () => {
       <VDivider />
 
       <VCardText>
-        <VTextField
-          v-model="search"
-          placeholder="Rechercher par nom, ville, adresse..."
-          prepend-inner-icon="tabler-search"
-          density="compact"
-          class="mb-4"
-          style="max-width: 360px"
-        />
+        <VRow>
+          <VCol
+            cols="12"
+            md="7"
+          >
+            <VTextField
+              v-model="search"
+              label="Rechercher"
+              placeholder="Nom, ville ou adresse…"
+              prepend-inner-icon="tabler-search"
+              density="compact"
+              clearable
+            />
+          </VCol>
+          <VCol
+            cols="12"
+            md="5"
+          >
+            <!--
+              Filtre par événement : on part de l'affiche pour retrouver la
+              salle, son adresse et sa capacité. 
+            -->
+            <VSelect
+              v-model="eventFilter"
+              :items="eventOptions"
+              item-title="title"
+              item-value="id"
+              label="Événement"
+              placeholder="Tous les événements"
+              density="compact"
+              clearable
+            />
+          </VCol>
+        </VRow>
       </VCardText>
 
       <VDataTableServer
@@ -184,7 +225,7 @@ const confirmDelete = async () => {
         :items-per-page="15"
         :page="currentPage"
         :loading="isFetching"
-        :no-data-text="'Aucun lieu'"
+        no-data-text="Aucun lieu"
         class="text-no-wrap"
         @update:options="onTableOptions"
       >
@@ -237,7 +278,10 @@ const confirmDelete = async () => {
 
         <!-- Actions -->
         <template #item.actions="{ item }">
-          <VTooltip text="Modifier" location="top">
+          <VTooltip
+            text="Modifier"
+            location="top"
+          >
             <template #activator="{ props }">
               <VBtn
                 v-bind="props"
@@ -252,7 +296,10 @@ const confirmDelete = async () => {
             </template>
           </VTooltip>
 
-          <VTooltip text="Supprimer" location="top">
+          <VTooltip
+            text="Supprimer"
+            location="top"
+          >
             <template #activator="{ props }">
               <VBtn
                 v-bind="props"

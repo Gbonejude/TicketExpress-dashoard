@@ -1,4 +1,7 @@
 <script setup>
+import { notify } from '@/utils/toast'
+import { formatDateFr } from '@/utils/dateFormat'
+
 definePage({
   meta: {
     action: 'read',
@@ -9,16 +12,6 @@ definePage({
 import { $api } from '@/utils/api'
 
 const activeTab = ref('issued')
-
-const snackbar = ref(false)
-const snackText = ref('')
-const snackColor = ref('success')
-
-const notify = (text, color = 'success') => {
-  snackText.value = text
-  snackColor.value = color
-  snackbar.value = true
-}
 
 // ══════════════════════════════════════════════════════════════════════════
 //  Onglet 1 — Tickets émis
@@ -51,11 +44,51 @@ watch(search, value => {
 const headers = [
   { title: 'N° ticket', key: 'ticketNumber' },
   { title: 'Participant', key: 'attendee', sortable: false },
+  { title: 'Événement', key: 'event', sortable: false },
   { title: 'Type', key: 'ticketType', sortable: false },
+  { title: 'Montant', key: 'amount', sortable: false },
+  { title: 'Billets', key: 'orderTickets', sortable: false },
+  { title: 'Vendu le', key: 'soldAt', sortable: false },
   { title: 'Statut', key: 'status' },
   { title: 'Check-in (jour / heure)', key: 'checkin', sortable: false },
   { title: 'Actions', key: 'actions', sortable: false },
 ]
+
+const formatPrice = value =>
+  value === null || value === undefined
+    ? '—'
+    : `${new Intl.NumberFormat('fr-FR').format(Number(value))} FCFA`
+
+/**
+ * Date de vente : celle de la commande, pas celle du billet.
+ *
+ * Le billet est créé au moment du paiement, les deux coïncident donc presque
+ * toujours — mais l'achat est l'événement de référence, et c'est lui qu'un
+ * gestionnaire recherche.
+ */
+const soldAt = ticket => ticket.order?.createdAt ?? ticket.createdAt
+
+/**
+ * Nombre de billets pris dans la même commande. `ticketsCount` compte les
+ * billets émis ; à défaut, les quantités commandées.
+ */
+const orderTicketCount = ticket => {
+  const issued = Number(ticket.order?.ticketsCount ?? 0)
+
+  if (issued > 0) return issued
+
+  return (ticket.order?.items ?? [])
+    .reduce((sum, item) => sum + Number(item.quantity ?? 0), 0)
+}
+
+// ─── Détail d'un billet ──────────────────────────────────────────────────────
+const isShowDialogOpen = ref(false)
+const shownTicket = ref(null)
+
+const openShowDialog = ticket => {
+  shownTicket.value = ticket
+  isShowDialogOpen.value = true
+}
 
 const apiUrl = computed(() => {
   const params = new URLSearchParams({ page: String(currentPage.value) })
@@ -154,8 +187,10 @@ watch(dlSearch, value => {
 })
 
 const dlHeaders = [
-  { title: 'Commande', key: 'order', sortable: false },
-  { title: 'Client', key: 'client', sortable: false },
+  { title: 'N° commande', key: 'order', sortable: false },
+  { title: 'Participant', key: 'participant', sortable: false },
+  { title: 'Événement', key: 'event', sortable: false },
+  { title: 'Billets', key: 'tickets', sortable: false },
   { title: 'Téléchargements', key: 'downloads' },
   { title: 'Expire le', key: 'expiresAt', sortable: false },
   { title: 'État', key: 'state' },
@@ -286,19 +321,45 @@ const dlStateLabel = state => ({
               </span>
             </template>
 
+            <!--
+              Le téléphone remplace l'email : c'est par lui qu'on joint
+              l'acheteur. Le billet est au porteur, la personne qui présente le QR
+              peut donc être quelqu'un d'autre. 
+            -->
             <template #item.attendee="{ item }">
               <div>
                 <div class="font-weight-medium">
                   {{ item.attendeeName ?? '-' }}
                 </div>
                 <div class="text-caption text-medium-emphasis">
-                  {{ item.attendeeEmail ?? '' }}
+                  {{ item.order?.phone || '—' }}
                 </div>
+              </div>
+            </template>
+
+            <template #item.event="{ item }">
+              <div
+                class="text-body-2 text-truncate"
+                style="max-width: 200px"
+              >
+                {{ item.ticketType?.event?.title ?? '-' }}
               </div>
             </template>
 
             <template #item.ticketType="{ item }">
               {{ item.ticketType?.name ?? '-' }}
+            </template>
+
+            <template #item.amount="{ item }">
+              <span class="font-weight-medium">{{ formatPrice(item.amount) }}</span>
+            </template>
+
+            <template #item.orderTickets="{ item }">
+              {{ orderTicketCount(item) }}
+            </template>
+
+            <template #item.soldAt="{ item }">
+              {{ formatDateFr(soldAt(item)) }}
             </template>
 
             <template #item.status="{ item }">
@@ -312,15 +373,9 @@ const dlStateLabel = state => ({
             </template>
 
             <template #item.checkin="{ item }">
-              <VChip
-                v-if="item.isCheckedIn"
-                color="success"
-                size="small"
-                variant="tonal"
-                prepend-icon="tabler-check"
-              >
-                {{ item.checkedInAt?.human ?? 'Scanné' }}
-              </VChip>
+              <div v-if="item.isCheckedIn">
+                {{ formatDateFr(item.checkedInAt) || 'Scanné' }}
+              </div>
               <VChip
                 v-else
                 color="secondary"
@@ -332,6 +387,24 @@ const dlStateLabel = state => ({
             </template>
 
             <template #item.actions="{ item }">
+              <VTooltip
+                text="Voir"
+                location="top"
+              >
+                <template #activator="{ props }">
+                  <VBtn
+                    v-bind="props"
+                    icon
+                    variant="text"
+                    size="small"
+                    color="default"
+                    @click="openShowDialog(item)"
+                  >
+                    <VIcon icon="tabler-eye" />
+                  </VBtn>
+                </template>
+              </VTooltip>
+
               <VTooltip
                 v-if="item.status === 'valid' && !item.isCheckedIn"
                 text="Check-in"
@@ -384,7 +457,7 @@ const dlStateLabel = state => ({
                 <VTextField
                   v-model="dlSearch"
                   label="Rechercher"
-                  placeholder="N° commande…"
+                  placeholder="N° commande, participant ou événement…"
                   prepend-inner-icon="tabler-search"
                   density="compact"
                   clearable
@@ -420,18 +493,40 @@ const dlStateLabel = state => ({
             @update:options="onDlTableOptions"
           >
             <template #item.order="{ item }">
-              <span style="font-family: monospace">{{ item.order?.orderNumber ? `#${item.order.orderNumber}` : '-' }}</span>
+              <VChip
+                v-if="item.order?.orderNumber"
+                color="primary"
+                size="small"
+                variant="tonal"
+                class="font-weight-medium"
+              >
+                #{{ item.order.orderNumber }}
+              </VChip>
+              <span
+                v-else
+                class="text-medium-emphasis"
+              >-</span>
             </template>
 
-            <template #item.client="{ item }">
-              <div>
-                <div class="font-weight-medium">
-                  {{ item.order?.fullName ?? '-' }}
-                </div>
-                <div class="text-caption text-medium-emphasis">
-                  {{ item.order?.email ?? '' }}
-                </div>
+            <template #item.participant="{ item }">
+              <ParticipantCell
+                :name="item.order?.fullName"
+                :phone="item.order?.phone"
+                :user="item.order?.user"
+              />
+            </template>
+
+            <template #item.event="{ item }">
+              <div
+                class="text-body-2 text-truncate"
+                style="max-width: 200px"
+              >
+                {{ (item.order?.events ?? []).join(', ') || '—' }}
               </div>
+            </template>
+
+            <template #item.tickets="{ item }">
+              {{ item.order?.ticketsCount ?? 0 }}
             </template>
 
             <template #item.downloads="{ item }">
@@ -440,7 +535,7 @@ const dlStateLabel = state => ({
             </template>
 
             <template #item.expiresAt="{ item }">
-              {{ item.expiresAt?.human ?? '-' }}
+              {{ formatDateFr(item.expiresAt) }}
             </template>
 
             <template #item.state="{ item }">
@@ -456,6 +551,88 @@ const dlStateLabel = state => ({
         </VWindowItem>
       </VWindow>
     </VCard>
+
+    <!-- ─── Dialog Détail du billet ─────────────────────────────────────────── -->
+    <VDialog
+      v-model="isShowDialogOpen"
+      max-width="600"
+      scrollable
+    >
+      <VCard :title="`Billet ${shownTicket?.ticketNumber ?? ''}`">
+        <VCardText class="pt-2">
+          <div class="d-flex align-center gap-3 mb-4">
+            <VChip
+              :color="statusColor(shownTicket?.status)"
+              size="small"
+              variant="tonal"
+            >
+              {{ shownTicket?.statusLabel ?? shownTicket?.status }}
+            </VChip>
+            <VChip
+              :color="shownTicket?.isCheckedIn ? 'info' : 'secondary'"
+              size="small"
+              variant="tonal"
+            >
+              {{ shownTicket?.isCheckedIn ? 'Entré' : 'Pas encore entré' }}
+            </VChip>
+          </div>
+
+          <VRow dense>
+            <VCol
+              v-for="row in [
+                { label: 'Événement', value: shownTicket?.ticketType?.event?.title ?? '—' },
+                { label: 'Type de billet', value: shownTicket?.ticketType?.name ?? '—' },
+                { label: 'Montant payé', value: formatPrice(shownTicket?.amount) },
+                { label: 'Acheteur', value: shownTicket?.attendeeName ?? '—' },
+                { label: 'Téléphone', value: shownTicket?.order?.phone || '—' },
+                { label: 'Email', value: shownTicket?.attendeeEmail || '—' },
+                { label: 'N° de commande', value: shownTicket?.order?.orderNumber ? `#${shownTicket.order.orderNumber}` : '—' },
+                { label: 'Billets dans la commande', value: shownTicket ? orderTicketCount(shownTicket) : '—' },
+                { label: 'Vendu le', value: formatDateFr(soldAt(shownTicket ?? {})) },
+                { label: 'Check-in', value: shownTicket?.checkedInAt ? formatDateFr(shownTicket.checkedInAt) : 'Aucun' },
+                { label: 'Accès', value: shownTicket?.accessMethod ?? '—' },
+              ]"
+              :key="row.label"
+              cols="12"
+              sm="6"
+            >
+              <div class="text-caption text-medium-emphasis">
+                {{ row.label }}
+              </div>
+              <div class="text-body-1">
+                {{ row.value }}
+              </div>
+            </VCol>
+
+            <VCol
+              v-if="shownTicket?.refundReason"
+              cols="12"
+            >
+              <VAlert
+                type="warning"
+                variant="tonal"
+                density="compact"
+              >
+                Remboursé : {{ shownTicket.refundReason }}
+                <template v-if="shownTicket.refundedAt">
+                  ({{ formatDateFr(shownTicket.refundedAt) }})
+                </template>
+              </VAlert>
+            </VCol>
+          </VRow>
+        </VCardText>
+
+        <VCardActions class="justify-end pa-4">
+          <VBtn
+            variant="tonal"
+            color="secondary"
+            @click="isShowDialogOpen = false"
+          >
+            Fermer
+          </VBtn>
+        </VCardActions>
+      </VCard>
+    </VDialog>
 
     <!-- ─── Dialog Remboursement ─────────────────────────────────────────────── -->
     <VDialog
@@ -492,13 +669,5 @@ const dlStateLabel = state => ({
         </VCardActions>
       </VCard>
     </VDialog>
-
-    <VSnackbar
-      v-model="snackbar"
-      :color="snackColor"
-      location="top end"
-    >
-      {{ snackText }}
-    </VSnackbar>
   </div>
 </template>

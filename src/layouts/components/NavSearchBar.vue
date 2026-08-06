@@ -24,7 +24,6 @@ const appPages = [
   { title: 'Promotions', icon: 'tabler-rosette-discount', subject: 'promotions', url: { name: 'promotions' } },
   { title: 'Billets vendus', icon: 'tabler-ticket', subject: 'tickets', url: { name: 'tickets' } },
   { title: 'Coupons', icon: 'tabler-discount', subject: 'coupons', url: { name: 'coupons' } },
-  { title: 'Avis', icon: 'tabler-star', subject: 'reviews', url: { name: 'reviews' } },
   { title: 'Catégories', icon: 'tabler-category', subject: 'categories', url: { name: 'categories' } },
   { title: 'Lieux', icon: 'tabler-map-pin', subject: 'venues', url: { name: 'venues' } },
   { title: 'Organisateurs', icon: 'tabler-building-store', subject: 'organizers', url: { name: 'organizers' } },

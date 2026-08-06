@@ -1,4 +1,7 @@
 <script setup>
+import { notify } from '@/utils/toast'
+import { formatDateFr } from '@/utils/dateFormat'
+
 definePage({
   meta: {
     action: 'read',
@@ -80,16 +83,6 @@ const isSubmitting = ref(false)
 const formErrors = ref({})
 const refForm = ref()
 
-const snackbar = ref(false)
-const snackText = ref('')
-const snackColor = ref('success')
-
-const notify = (text, color = 'success') => {
-  snackText.value = text
-  snackColor.value = color
-  snackbar.value = true
-}
-
 const form = reactive({
   eventId: null,
   ticketTypeId: null,
@@ -110,6 +103,7 @@ const loadTicketTypes = async eventId => {
   if (!eventId) return
   try {
     const res = await $api(`/events/${eventId}/ticket-types`)
+
     ticketTypes.value = res?.data ?? []
   } catch {
     ticketTypes.value = []
@@ -133,6 +127,7 @@ const computedPromoPrice = computed(() => {
   const base = basePrice.value
   const val = Number(form.reductionValue)
   if (!base || !val || val <= 0) return null
+
   const price = form.reductionType === 'percentage'
     ? base * (1 - val / 100)
     : base - val
@@ -238,8 +233,8 @@ const confirmDelete = async () => {
       <VCardTitle class="d-flex align-center justify-space-between pa-4">
         <span class="text-h6">Promotions</span>
         <VBtn
-          color="primary"
           v-if="$can('create', 'promotions')"
+          color="primary"
           prepend-icon="tabler-plus"
           @click="openCreateDialog"
         >
@@ -302,23 +297,23 @@ const confirmDelete = async () => {
         </template>
 
         <template #item.discountPercentage="{ item }">
-          <VChip
-            color="error"
-            size="small"
-            variant="tonal"
-          >
+          <span class="text-error font-weight-medium">
             -{{ item.discountPercentage ?? 0 }}%
-          </VChip>
+          </span>
         </template>
 
+        <!--
+          Période : même rendu que les dates de Gestion des Événements, sur
+          deux lignes. Les deux dates tenaient sur une seule ligne en
+          text-caption, ce qui élargissait la colonne et rendait le début et
+          la fin indistinguables. 
+        -->
         <template #item.period="{ item }">
-          <div class="text-caption">
-            {{ item.promotionStartDate?.human ?? '-' }}
-            <VIcon
-              icon="tabler-arrow-right"
-              size="14"
-            />
-            {{ item.promotionEndDate?.human ?? '-' }}
+          <div class="text-body-2">
+            {{ formatDateFr(item.promotionStartDate) }}
+          </div>
+          <div class="text-caption text-medium-emphasis">
+            → {{ formatDateFr(item.promotionEndDate) }}
           </div>
         </template>
 
@@ -527,13 +522,5 @@ const confirmDelete = async () => {
         </VCardActions>
       </VCard>
     </VDialog>
-
-    <VSnackbar
-      v-model="snackbar"
-      :color="snackColor"
-      location="top end"
-    >
-      {{ snackText }}
-    </VSnackbar>
   </div>
 </template>

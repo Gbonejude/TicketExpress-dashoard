@@ -1,4 +1,6 @@
 <script setup>
+import { formatDateFr } from '@/utils/dateFormat'
+
 definePage({
   meta: {
     action: 'read',
@@ -32,7 +34,7 @@ watch(search, value => {
 const headers = [
   { title: 'Référence', key: 'transactionReference' },
   { title: 'Commande', key: 'order', sortable: false },
-  { title: 'Client', key: 'client', sortable: false },
+  { title: 'Participant', key: 'participant', sortable: false },
   { title: 'Montant', key: 'amount' },
   { title: 'Méthode', key: 'method' },
   { title: 'Statut', key: 'status' },
@@ -156,23 +158,48 @@ const methodColor = method => ({
           </span>
         </template>
 
+        <!--
+          N° de commande : même traitement visuel que le statut, une puce.
+          En texte monospace il se confondait avec la référence de
+          transaction juste à sa gauche. 
+        -->
         <template #item.order="{ item }">
-          <span style="font-family: monospace">{{ item.order?.orderNumber ? `#${item.order.orderNumber}` : '-' }}</span>
+          <VChip
+            v-if="item.order?.orderNumber"
+            color="primary"
+            size="small"
+            variant="tonal"
+            class="font-weight-medium"
+          >
+            #{{ item.order.orderNumber }}
+          </VChip>
+          <span
+            v-else
+            class="text-medium-emphasis"
+          >-</span>
         </template>
 
-        <template #item.client="{ item }">
-          <div>
-            <div class="font-weight-medium">
-              {{ item.order?.fullName ?? '-' }}
-            </div>
-            <div class="text-caption text-medium-emphasis">
-              {{ item.order?.email ?? '' }}
-            </div>
-          </div>
+        <template #item.participant="{ item }">
+          <ParticipantCell
+            :name="item.order?.fullName"
+            :phone="item.order?.phone"
+            :user="item.order?.user"
+          />
         </template>
 
+        <!--
+          Montant : la puce reprend la couleur du statut, donc un encaissement
+          réussi et un impayé ne se lisent pas de la même façon. 
+        -->
         <template #item.amount="{ item }">
-          <span class="font-weight-medium">{{ formatPrice(item.amount) }}</span>
+          <VChip
+            :color="statusColor(item.status)"
+            size="small"
+            variant="tonal"
+            class="font-weight-medium"
+          >
+            {{ formatPrice(item.amount) }}
+          </VChip>
         </template>
 
         <template #item.method="{ item }">
@@ -195,8 +222,12 @@ const methodColor = method => ({
           </VChip>
         </template>
 
+        <!--
+          Date en français, comme partout ailleurs. `human` de l'API renvoie
+          un « 3 days ago » anglais au milieu d'une interface française. 
+        -->
         <template #item.createdAt="{ item }">
-          {{ item.paidAt?.human ?? item.createdAt?.human ?? '-' }}
+          {{ formatDateFr(item.paidAt ?? item.createdAt) }}
         </template>
       </VDataTableServer>
     </VCard>

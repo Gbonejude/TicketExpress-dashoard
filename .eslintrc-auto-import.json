@@ -357,6 +357,12 @@
     "toMediaUrl": true,
     "getEcho": true,
     "setupRealtime": true,
-    "useRealtimeRefresh": true
+    "useRealtimeRefresh": true,
+    "formatDateFr": true,
+    "formatDateShortFr": true,
+    "notify": true,
+    "notifyApiError": true,
+    "notifyError": true,
+    "notifySuccess": true
   }
 }

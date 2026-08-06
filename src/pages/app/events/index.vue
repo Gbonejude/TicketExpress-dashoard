@@ -1,4 +1,8 @@
 <script setup>
+import { notify, notifyApiError } from '@/utils/toast'
+
+import { formatDateFr } from '@/utils/dateFormat'
+
 definePage({
   meta: {
     action: 'read',
@@ -59,16 +63,86 @@ const headers = [
   { title: 'Catégorie', key: 'category', sortable: false },
   { title: 'Statut', key: 'status' },
   { title: 'Dates', key: 'dates', sortable: false },
-  { title: 'Billets', key: 'tickets' },
-  { title: 'Note', key: 'rating' },
+
+  // Ce n'est ni le nombre de billets vendus ni le stock : c'est le nombre de
+  // tarifs de l'événement (VIP, Standard, Étudiant…). Le libellé le dit, sinon
+  // « 3 » se lit comme trois billets. Les ventes sont dans l'onglet Statistiques
+  // de l'événement, et dans Billets vendus.
+  { title: 'Types de billets', key: 'tickets' },
   { title: 'Actions', key: 'actions', sortable: false },
 ]
 
+/**
+ * Le filtre voit les quatre statuts — c'est par lui qu'on obtient la liste des
+ * événements annulés ou terminés.
+ */
 const statusOptions = [
   { title: 'Brouillon', value: 'draft' },
   { title: 'Publié', value: 'published' },
   { title: 'Annulé', value: 'cancelled' },
   { title: 'Terminé', value: 'finished' },
+]
+
+/**
+ * Le formulaire, lui, n'en propose que deux.
+ *
+ * « Annulé » s'obtient par l'action Annuler, qui prévient les acheteurs et libère
+ * le stock — le choisir dans une liste déroulante changerait le statut sans rien
+ * de tout cela. « Terminé » est une conséquence du calendrier, pas une décision :
+ * un événement se termine parce que sa date de fin est passée.
+ */
+const STATUS_FORM_BASE = [
+  { title: 'Brouillon', value: 'draft' },
+  { title: 'Publié', value: 'published' },
+]
+
+/**
+ * Les deux statuts modifiables, plus celui de l'événement en cours d'édition
+ * s'il n'en fait pas partie.
+ *
+ * Sans cet ajout, ouvrir un événement annulé affichait « cancelled » brut : le
+ * select n'a pas d'option correspondante et retombe sur la valeur. L'option est
+ * désactivée — on la lit, on n'y revient pas.
+ */
+const statusFormOptions = computed(() => {
+  const current = form.status
+
+  if (!current || STATUS_FORM_BASE.some(option => option.value === current)) {
+    return STATUS_FORM_BASE
+  }
+
+  return [
+    ...STATUS_FORM_BASE,
+    {
+      title: statusOptions.find(option => option.value === current)?.title ?? current,
+      value: current,
+      props: { disabled: true },
+    },
+  ]
+})
+
+// ─── Visionneuse d'affiche ───────────────────────────────────────────────────
+const lightbox = reactive({ open: false, src: null, title: null })
+
+/**
+ * Ouvre l'image en grand. On passe la version pleine taille, jamais la vignette :
+ * agrandir un 40 px donnerait une bouillie de pixels.
+ */
+const showImage = (src, title) => {
+  if (!src) return
+
+  lightbox.src = toMediaUrl(src)
+  lightbox.title = title
+  lightbox.open = true
+}
+
+/** Onglets de statut au-dessus du tableau, pour atteindre chaque liste d'un clic. */
+const statusTabs = [
+  { title: 'Tous', value: null, icon: 'tabler-list' },
+  { title: 'Brouillons', value: 'draft', icon: 'tabler-pencil' },
+  { title: 'Publiés', value: 'published', icon: 'tabler-broadcast' },
+  { title: 'Annulés', value: 'cancelled', icon: 'tabler-calendar-x' },
+  { title: 'Terminés', value: 'finished', icon: 'tabler-flag-check' },
 ]
 
 // ─── Dropdown data ─────────────────────────────────────────────────────────
@@ -211,6 +285,7 @@ const buildPayload = () => Object.fromEntries(meaningfulEntries())
 
 const buildFormData = () => {
   const fd = new FormData()
+
   meaningfulEntries().forEach(([key, val]) => { fd.append(key, String(val)) })
   if (bannerFile.value) fd.append('banner', bannerFile.value)
 
@@ -228,6 +303,7 @@ const saveEvent = async () => {
     if (editingEvent.value) {
       if (bannerFile.value) {
         const fd = buildFormData()
+
         fd.append('_method', 'PUT')
         await $api(`/events/${editingEvent.value.id}`, { method: 'POST', body: fd })
       } else {
@@ -239,9 +315,13 @@ const saveEvent = async () => {
       await $api('/events', { method: 'POST', body: buildPayload() })
     }
     isFormDialogOpen.value = false
+    notify(editingEvent.value ? 'Événement mis à jour.' : 'Événement créé.')
     fetchEvents()
   } catch (err) {
-    formErrors.value = err?.data?.errors ?? {}
+    const errors = err?.data?.errors ?? err?._data?.errors
+
+    formErrors.value = errors ?? {}
+    if (!errors) notifyApiError(err, "Impossible d'enregistrer l'événement.")
   } finally {
     isSubmitting.value = false
   }
@@ -249,10 +329,14 @@ const saveEvent = async () => {
 
 const togglePublish = async event => {
   const action = event.status === 'published' ? 'unpublish' : 'publish'
+
   isSubmitting.value = true
   try {
     await $api(`/events/${event.id}/${action}`, { method: 'POST' })
+    notify(action === 'publish' ? 'Événement publié.' : 'Événement dépublié.')
     fetchEvents()
+  } catch (error) {
+    notifyApiError(error, "Impossible de changer l'état de l'événement.")
   } finally {
     isSubmitting.value = false
   }
@@ -263,7 +347,10 @@ const confirmCancel = async () => {
   try {
     await $api(`/events/${cancellingEvent.value.id}/cancel`, { method: 'POST' })
     isCancelDialogOpen.value = false
+    notify('Événement annulé.', 'warning')
     fetchEvents()
+  } catch (error) {
+    notifyApiError(error, "Impossible d'annuler l'événement.")
   } finally {
     isSubmitting.value = false
   }
@@ -274,7 +361,10 @@ const confirmDelete = async () => {
   try {
     await $api(`/events/${deletingEvent.value.id}`, { method: 'DELETE' })
     isDeleteDialogOpen.value = false
+    notify('Événement supprimé.')
     fetchEvents()
+  } catch (error) {
+    notifyApiError(error, "Impossible de supprimer l'événement.")
   } finally {
     isSubmitting.value = false
   }
@@ -287,8 +377,8 @@ const confirmDelete = async () => {
       <VCardTitle class="d-flex align-center justify-space-between pa-4">
         <span class="text-h6">Gestion des Événements</span>
         <VBtn
-          color="primary"
           v-if="$can('create', 'events')"
+          color="primary"
           prepend-icon="tabler-plus"
           @click="openCreateDialog"
         >
@@ -297,6 +387,24 @@ const confirmDelete = async () => {
       </VCardTitle>
 
       <VDivider />
+
+      <!--
+        Les listes par statut, dont « Annulés », à un clic. Elles pilotent le
+        même filtre que le select en dessous : une seule source de vérité. 
+      -->
+      <div class="px-4 pt-3 d-flex flex-wrap gap-2">
+        <VChip
+          v-for="tab in statusTabs"
+          :key="tab.title"
+          :color="statusFilter === tab.value ? 'primary' : undefined"
+          :variant="statusFilter === tab.value ? 'flat' : 'tonal'"
+          size="small"
+          :prepend-icon="tab.icon"
+          @click="statusFilter = tab.value"
+        >
+          {{ tab.title }}
+        </VChip>
+      </div>
 
       <VCardText>
         <VRow>
@@ -367,6 +475,8 @@ const confirmDelete = async () => {
               size="40"
               color="primary"
               variant="tonal"
+              :class="{ 'cursor-pointer': item.banner || item.bannerThumbnail }"
+              @click="showImage(item.banner || item.bannerThumbnail, item.title)"
             >
               <VImg
                 v-if="item.bannerThumbnail || item.banner"
@@ -391,14 +501,6 @@ const confirmDelete = async () => {
                 >
                   {{ item.eventTypeLabel ?? 'Physique' }}
                 </VChip>
-                <VChip
-                  size="x-small"
-                  color="error"
-                  variant="tonal"
-                  prepend-icon="tabler-heart"
-                >
-                  {{ item.favoritesCount ?? 0 }}
-                </VChip>
               </div>
             </div>
           </div>
@@ -406,14 +508,9 @@ const confirmDelete = async () => {
 
         <!-- Catégorie -->
         <template #item.category="{ item }">
-          <VChip
-            v-if="item.category?.name"
-            size="small"
-            color="primary"
-            variant="tonal"
-          >
+          <span v-if="item.category?.name">
             {{ item.category.name }}
-          </VChip>
+          </span>
           <span
             v-else
             class="text-medium-emphasis"
@@ -422,47 +519,31 @@ const confirmDelete = async () => {
 
         <!-- Statut -->
         <template #item.status="{ item }">
-          <VChip
-            :color="statusColor(item.status)"
-            size="small"
-            variant="tonal"
+          <span
+            :class="{
+              'text-secondary': statusColor(item.status) === 'secondary',
+              'text-success': statusColor(item.status) === 'success',
+              'text-error': statusColor(item.status) === 'error',
+              'text-info': statusColor(item.status) === 'info'
+            }"
           >
             {{ item.statusLabel ?? item.status }}
-          </VChip>
+          </span>
         </template>
 
         <!-- Dates -->
         <template #item.dates="{ item }">
           <div class="text-body-2">
-            {{ item.startDate?.human ?? '-' }}
+            {{ formatDateFr(item.startDate) }}
           </div>
           <div class="text-caption text-medium-emphasis">
-            → {{ item.endDate?.human ?? '-' }}
+            → {{ formatDateFr(item.endDate) }}
           </div>
         </template>
 
         <!-- Billets -->
         <template #item.tickets="{ item }">
           {{ item.ticketTypesCount ?? 0 }}
-        </template>
-
-        <!-- Note -->
-        <template #item.rating="{ item }">
-          <div
-            v-if="item.averageRating"
-            class="d-flex align-center gap-1"
-          >
-            <VIcon
-              icon="tabler-star-filled"
-              size="16"
-              color="warning"
-            />
-            <span>{{ item.averageRating }}</span>
-          </div>
-          <span
-            v-else
-            class="text-medium-emphasis"
-          >-</span>
         </template>
 
         <!-- Actions -->
@@ -619,11 +700,17 @@ const confirmDelete = async () => {
                 cols="12"
                 class="d-flex align-center gap-6"
               >
+                <!--
+                  La vignette de 88 px ne permet pas de vérifier une affiche :
+                  un clic l'ouvre en grand, avant comme après import. 
+                -->
                 <VAvatar
                   rounded
                   size="88"
                   color="primary"
                   variant="tonal"
+                  :class="{ 'cursor-pointer': bannerPreview }"
+                  @click="bannerPreview && showImage(bannerPreview, form.title || 'Bannière')"
                 >
                   <VImg
                     v-if="bannerPreview"
@@ -668,7 +755,7 @@ const confirmDelete = async () => {
                   accept="image/*"
                   class="d-none"
                   @change="onBannerSelected"
-                />
+                >
               </VCol>
 
               <VCol
@@ -746,7 +833,7 @@ const confirmDelete = async () => {
               >
                 <VSelect
                   v-model="form.status"
-                  :items="statusOptions"
+                  :items="statusFormOptions"
                   item-title="title"
                   item-value="value"
                   label="Statut"
@@ -941,5 +1028,11 @@ const confirmDelete = async () => {
         </VCardActions>
       </VCard>
     </VDialog>
+
+    <ImageLightbox
+      v-model="lightbox.open"
+      :src="lightbox.src"
+      :title="lightbox.title"
+    />
   </div>
 </template>

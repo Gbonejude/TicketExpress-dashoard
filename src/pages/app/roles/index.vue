@@ -1,4 +1,6 @@
 <script setup>
+import { notify } from '@/utils/toast'
+
 definePage({
   meta: {
     action: 'read',
@@ -60,16 +62,6 @@ const actionLabels = {
 watch(() => [...form.screens], selected => {
   form.actions = form.actions.filter(a => selected.includes(a.split('.')[0]))
 })
-
-const snackbar = ref(false)
-const snackText = ref('')
-const snackColor = ref('success')
-
-const notify = (text, color = 'success') => {
-  snackText.value = text
-  snackColor.value = color
-  snackbar.value = true
-}
 
 const screenLabel = key => screenCatalogue.value.find(s => s.key === key)?.label ?? key
 
@@ -435,12 +427,5 @@ const confirmDelete = async () => {
       </VCard>
     </VDialog>
 
-    <VSnackbar
-      v-model="snackbar"
-      :color="snackColor"
-      location="top end"
-    >
-      {{ snackText }}
-    </VSnackbar>
   </div>
 </template>

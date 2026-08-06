@@ -1,4 +1,7 @@
 <script setup>
+import { notify, notifyApiError } from '@/utils/toast'
+import { formatDateFr } from '@/utils/dateFormat'
+
 definePage({
   meta: {
     action: 'read',
@@ -13,6 +16,12 @@ const router = useRouter()
 const currentPage = ref(1)
 const search = ref('')
 const statusFilter = ref(null)
+const eventFilter = ref(null)
+
+// 100 par page : le select doit contenir tous les événements.
+const { data: eventsData } = useApi('/events?page=1&per_page=100')
+
+const eventOptions = computed(() => eventsData.value?.data ?? [])
 
 const statusOptions = [
   { title: 'En attente', value: 'pending' },
@@ -36,32 +45,67 @@ const isCancelDialogOpen = ref(false)
 const cancellingOrder = ref(null)
 const isSubmitting = ref(false)
 
-const snackbar = ref(false)
-const snackText = ref('')
-const snackColor = ref('success')
-
 const headers = [
   { title: 'N° commande', key: 'orderNumber' },
-  { title: 'Client', key: 'client', sortable: false },
+  { title: 'Participant', key: 'participant', sortable: false },
+  { title: 'Événement', key: 'event', sortable: false },
+  { title: 'Billets', key: 'ticketsCount', sortable: false },
   { title: 'Montant', key: 'totalAmount' },
   { title: 'Statut', key: 'status' },
   { title: 'Livraison', key: 'delivery', sortable: false },
-  { title: 'Articles', key: 'itemsCount' },
   { title: 'Date', key: 'createdAt', sortable: false },
   { title: 'Actions', key: 'actions', sortable: false },
 ]
+
+/**
+ * L'événement de la commande, lu sur ses lignes.
+ *
+ * Une commande passe par la page d'un événement, elle n'en concerne donc qu'un —
+ * mais rien ne l'interdit au niveau des données, d'où le décompte : si plusieurs
+ * événements apparaissent, on le dit plutôt que d'en montrer un au hasard.
+ */
+const orderEvent = order => {
+  const titles = [...new Set(
+    (order.items ?? [])
+      .map(item => item.ticketType?.event?.title)
+      .filter(Boolean),
+  )]
+
+  if (!titles.length) return { title: null, extra: 0 }
+
+  return { title: titles[0], extra: titles.length - 1 }
+}
+
+/**
+ * Nombre de billets de la commande.
+ *
+ * `ticketsCount` compte les billets réellement émis — donc 0 tant que la
+ * commande n'est pas payée. La somme des quantités commandées est alors la seule
+ * information disponible, et c'est ce que l'on veut voir sur une commande en
+ * attente.
+ */
+const orderTickets = order => {
+  const issued = Number(order.ticketsCount ?? 0)
+
+  if (issued > 0) return { count: issued, issued: true }
+
+  const ordered = (order.items ?? []).reduce((sum, item) => sum + Number(item.quantity ?? 0), 0)
+
+  return { count: ordered, issued: false }
+}
 
 // ─── List fetch (server pagination) ─────────────────────────────────────────
 const apiUrl = computed(() => {
   const params = new URLSearchParams({ page: String(currentPage.value) })
   if (statusFilter.value) params.set('status', statusFilter.value)
+  if (eventFilter.value) params.set('event_id', eventFilter.value)
   if (debouncedSearch.value) params.set('search', debouncedSearch.value)
 
   return `/orders?${params.toString()}`
 })
 
 // Reset to first page whenever a filter changes.
-watch([statusFilter, debouncedSearch], () => { currentPage.value = 1 })
+watch([statusFilter, eventFilter, debouncedSearch], () => { currentPage.value = 1 })
 
 const { data: ordersData, isFetching, execute: fetchOrders } = useApi(apiUrl)
 
@@ -99,14 +143,10 @@ const confirmCancel = async () => {
   try {
     await $api(`/orders/${cancellingOrder.value.id}/cancel`, { method: 'POST' })
     isCancelDialogOpen.value = false
-    snackColor.value = 'success'
-    snackText.value = 'Commande annulée avec succès.'
-    snackbar.value = true
+    notify('Commande annulée avec succès.')
     fetchOrders()
   } catch (err) {
-    snackColor.value = 'error'
-    snackText.value = err?.data?.message ?? "Impossible d'annuler la commande."
-    snackbar.value = true
+    notifyApiError(err, "Impossible d'annuler la commande.")
   } finally {
     isSubmitting.value = false
   }
@@ -126,12 +166,12 @@ const confirmCancel = async () => {
         <VRow>
           <VCol
             cols="12"
-            md="8"
+            md="5"
           >
             <VTextField
               v-model="search"
               label="Rechercher"
-              placeholder="N° commande, email, nom du client…"
+              placeholder="N° commande, email ou nom du participant…"
               prepend-inner-icon="tabler-search"
               density="compact"
               clearable
@@ -140,6 +180,21 @@ const confirmCancel = async () => {
           <VCol
             cols="12"
             md="4"
+          >
+            <VSelect
+              v-model="eventFilter"
+              :items="eventOptions"
+              item-title="title"
+              item-value="id"
+              label="Événement"
+              placeholder="Tous les événements"
+              density="compact"
+              clearable
+            />
+          </VCol>
+          <VCol
+            cols="12"
+            md="3"
           >
             <VSelect
               v-model="statusFilter"
@@ -166,28 +221,64 @@ const confirmCancel = async () => {
         class="text-no-wrap"
         @update:options="onTableOptions"
       >
-        <!-- N° commande -->
+        <!--
+          N° commande : puce, comme le statut. C'est le repère qu'on cherche
+          en premier dans la liste, il doit se distinguer du corps de texte. 
+        -->
         <template #item.orderNumber="{ item }">
-          <span
+          <VChip
+            v-if="item.orderNumber"
+            color="primary"
+            size="small"
+            variant="tonal"
             class="font-weight-medium"
-            style="font-family: monospace"
           >
-            {{ item.orderNumber ? `#${item.orderNumber}` : '-' }}
-          </span>
+            #{{ item.orderNumber }}
+          </VChip>
+          <span
+            v-else
+            class="text-medium-emphasis"
+          >-</span>
         </template>
 
-        <!-- Client -->
-        <template #item.client="{ item }">
-          <div>
-            <div class="font-weight-medium">
-              {{ item.fullName ?? '-' }}
+        <!-- Participant -->
+        <template #item.participant="{ item }">
+          <ParticipantCell
+            :name="item.fullName"
+            :phone="item.phone"
+            :user="item.user"
+          />
+        </template>
+
+        <!-- Événement -->
+        <template #item.event="{ item }">
+          <template v-if="orderEvent(item).title">
+            <div
+              class="text-body-2 text-truncate"
+              style="max-width: 220px"
+            >
+              {{ orderEvent(item).title }}
             </div>
-            <div class="text-caption text-medium-emphasis">
-              {{ item.email ?? '' }}
+            <div
+              v-if="orderEvent(item).extra > 0"
+              class="text-caption text-medium-emphasis"
+            >
+              +{{ orderEvent(item).extra }} autre(s)
             </div>
-            <div class="text-caption text-medium-emphasis">
-              {{ item.phone ?? '' }}
-            </div>
+          </template>
+          <span
+            v-else
+            class="text-medium-emphasis"
+          >-</span>
+        </template>
+
+        <!-- Billets -->
+        <template #item.ticketsCount="{ item }">
+          <div class="text-body-2">
+            {{ orderTickets(item).count }}
+          </div>
+          <div class="text-caption text-medium-emphasis">
+            {{ orderTickets(item).issued ? 'émis' : 'commandés' }}
           </div>
         </template>
 
@@ -212,14 +303,9 @@ const confirmCancel = async () => {
           {{ item.deliveryMethodLabel ?? '-' }}
         </template>
 
-        <!-- Articles -->
-        <template #item.itemsCount="{ item }">
-          {{ item.itemsCount ?? 0 }}
-        </template>
-
         <!-- Date -->
         <template #item.createdAt="{ item }">
-          {{ item.createdAt?.human ?? '-' }}
+          {{ formatDateFr(item.createdAt) }}
         </template>
 
         <!-- Actions -->
@@ -296,13 +382,5 @@ const confirmCancel = async () => {
         </VCardActions>
       </VCard>
     </VDialog>
-
-    <VSnackbar
-      v-model="snackbar"
-      :color="snackColor"
-      location="top end"
-    >
-      {{ snackText }}
-    </VSnackbar>
   </div>
 </template>

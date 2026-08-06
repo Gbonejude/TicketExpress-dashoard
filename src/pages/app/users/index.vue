@@ -1,4 +1,7 @@
 <script setup>
+import { notify, notifyApiError } from '@/utils/toast'
+import { formatDateFr } from '@/utils/dateFormat'
+
 definePage({
   meta: {
     action: 'read',
@@ -9,6 +12,7 @@ definePage({
 import { $api, toMediaUrl } from '@/utils/api'
 
 const search = ref('')
+const roleFilter = ref(null)
 const currentPage = ref(1)
 const isFormDialogOpen = ref(false)
 const isDeleteDialogOpen = ref(false)
@@ -21,12 +25,13 @@ const imageInputRef = ref(null)
 const formErrors = ref({})
 const refForm = ref()
 
+// Pas de `password` : il est généré par l'API et envoyé par mail au
+// destinataire (CreateUserAction). Personne ne le saisit ici.
 const form = reactive({
   first_name: '',
   last_name: '',
   email: '',
   phone: '',
-  password: '',
   role: '',
   gender: '',
   birthday: '',
@@ -41,7 +46,7 @@ const headers = [
 ]
 
 const roleOptions = [
-  { title: 'Client', value: 'client' },
+  { title: 'Participant', value: 'participant' },
   { title: 'Administrateur', value: 'admin' },
   { title: 'Organisateur', value: 'organizer-manager' },
   { title: 'Super Administrateur', value: 'super-admin' },
@@ -55,11 +60,12 @@ const genderOptions = [
 const apiUrl = computed(() => {
   const params = new URLSearchParams({ page: String(currentPage.value) })
   if (search.value) params.set('search', search.value)
+  if (roleFilter.value) params.set('role', roleFilter.value)
 
   return `/users?${params.toString()}`
 })
 
-watch(search, () => { currentPage.value = 1 })
+watch([search, roleFilter], () => { currentPage.value = 1 })
 
 const { data: usersData, isFetching, execute: fetchUsers } = useApi(apiUrl)
 
@@ -73,7 +79,7 @@ const onTableOptions = ({ page }) => {
 const roleLabel = role => roleOptions.find(r => r.value === role)?.title ?? (role ?? '-')
 
 const roleColor = role => ({
-  'client': 'secondary',
+  'participant': 'secondary',
   'admin': 'primary',
   'organizer-manager': 'info',
   'super-admin': 'error',
@@ -84,7 +90,6 @@ const resetForm = () => {
   form.last_name = ''
   form.email = ''
   form.phone = ''
-  form.password = ''
   form.role = ''
   form.gender = ''
   form.birthday = ''
@@ -119,7 +124,6 @@ const openEditDialog = user => {
   form.last_name = user.lastName ?? ''
   form.email = user.email ?? ''
   form.phone = user.phone ?? ''
-  form.password = ''
   form.role = user.role ?? ''
   form.gender = user.gender ?? ''
   form.birthday = user.birthday ? String(user.birthday).slice(0, 10) : ''
@@ -161,26 +165,28 @@ const saveUser = async () => {
         formData.append('_method', 'PUT')
         await $api(`/users/${editingUser.value.id}`, { method: 'POST', body: formData })
       } else {
-        const payload = { ...form }
-        if (!payload.password) delete payload.password
-
-        await useApi(`/users/${editingUser.value.id}`).put(payload).json()
+        await useApi(`/users/${editingUser.value.id}`).put({ ...form }).json()
       }
-    } else if (imageFile.value) {
-      const formData = buildFormData()
-
-      await $api('/users', { method: 'POST', body: formData })
+      notify('Utilisateur mis à jour.')
     } else {
-      const payload = { ...form }
-      if (!payload.password) delete payload.password
+      if (imageFile.value) {
+        const formData = buildFormData()
 
-      await useApi('/users').post(payload).json()
+        await $api('/users', { method: 'POST', body: formData })
+      } else {
+        await useApi('/users').post({ ...form }).json()
+      }
+
+      // Le mot de passe part par mail : le dire, sinon l'administrateur cherche
+      // ce qu'il doit transmettre au nouvel utilisateur.
+      notify(`Utilisateur créé. Ses identifiants ont été envoyés à ${form.email}.`)
     }
     isFormDialogOpen.value = false
     fetchUsers()
   } catch (error) {
-    if (error?.data?.errors) formErrors.value = error.data.errors
-    else if (error?._data?.errors) formErrors.value = error._data.errors
+    const data = error?.data ?? error?._data
+    if (data?.errors) formErrors.value = data.errors
+    else notifyApiError(error, "Impossible d'enregistrer l'utilisateur.")
   } finally {
     isSubmitting.value = false
   }
@@ -191,7 +197,10 @@ const confirmDelete = async () => {
   try {
     await useApi(`/users/${deletingUser.value.id}`).delete().json()
     isDeleteDialogOpen.value = false
+    notify('Utilisateur supprimé.')
     fetchUsers()
+  } catch (error) {
+    notifyApiError(error, "Impossible de supprimer l'utilisateur.")
   } finally {
     isSubmitting.value = false
   }
@@ -204,8 +213,8 @@ const confirmDelete = async () => {
       <VCardTitle class="d-flex align-center justify-space-between pa-4">
         <span class="text-h6">Gestion des Utilisateurs</span>
         <VBtn
-          color="primary"
           v-if="$can('create', 'users')"
+          color="primary"
           prepend-icon="tabler-plus"
           @click="openCreateDialog"
         >
@@ -216,14 +225,36 @@ const confirmDelete = async () => {
       <VDivider />
 
       <VCardText>
-        <VTextField
-          v-model="search"
-          placeholder="Rechercher par nom, email ou téléphone..."
-          prepend-inner-icon="tabler-search"
-          density="compact"
-          class="mb-4"
-          style="max-width: 360px"
-        />
+        <VRow>
+          <VCol
+            cols="12"
+            md="8"
+          >
+            <VTextField
+              v-model="search"
+              label="Rechercher"
+              placeholder="Nom, email ou téléphone…"
+              prepend-inner-icon="tabler-search"
+              density="compact"
+              clearable
+            />
+          </VCol>
+          <VCol
+            cols="12"
+            md="4"
+          >
+            <VSelect
+              v-model="roleFilter"
+              :items="roleOptions"
+              item-title="title"
+              item-value="value"
+              label="Rôle"
+              placeholder="Tous les rôles"
+              density="compact"
+              clearable
+            />
+          </VCol>
+        </VRow>
       </VCardText>
 
       <VDataTableServer
@@ -286,7 +317,7 @@ const confirmDelete = async () => {
 
         <!-- Créé le -->
         <template #item.createdAt="{ item }">
-          {{ item.createdAt?.human ?? '-' }}
+          {{ formatDateFr(item.createdAt) }}
         </template>
 
         <!-- Actions -->
@@ -428,7 +459,7 @@ const confirmDelete = async () => {
                   v-model="form.email"
                   label="Email"
                   type="email"
-                  :rules="[emailValidator]"
+                  :rules="[requiredValidator, emailValidator]"
                   :error-messages="formErrors.email"
                 />
               </VCol>
@@ -447,20 +478,6 @@ const confirmDelete = async () => {
                     v => /^([0-9\s\-+()]*)$/.test(v ?? '') || 'Format de téléphone invalide',
                   ]"
                   :error-messages="formErrors.phone"
-                />
-              </VCol>
-
-              <VCol
-                cols="12"
-                md="6"
-              >
-                <VTextField
-                  v-model="form.password"
-                  :label="editingUser ? 'Nouveau mot de passe (laisser vide pour ne pas changer)' : 'Mot de passe (optionnel)'"
-                  type="password"
-                  autocomplete="new-password"
-                  :rules="[v => !v || v.length >= 8 || 'Le mot de passe doit contenir au moins 8 caractères']"
-                  :error-messages="formErrors.password"
                 />
               </VCol>
 
@@ -505,6 +522,27 @@ const confirmDelete = async () => {
                   :rules="[v => !v || new Date(v) < new Date(new Date().toDateString()) || 'La date de naissance doit être antérieure à aujourd\'hui']"
                   :error-messages="formErrors.birthday"
                 />
+              </VCol>
+
+              <!--
+                Rien à l'ajout : le mot de passe généré puis envoyé par mail
+                n'a pas besoin d'être annoncé dans le formulaire. À la
+                modification, l'absence de champ mot de passe mérite en
+                revanche une explication. 
+              -->
+              <VCol
+                v-if="editingUser"
+                cols="12"
+              >
+                <VAlert
+                  type="info"
+                  variant="tonal"
+                  density="compact"
+                  icon="tabler-mail-forward"
+                >
+                  Le mot de passe ne se modifie pas d'ici. L'utilisateur le
+                  renouvelle lui-même via « mot de passe oublié ».
+                </VAlert>
               </VCol>
             </VRow>
           </VForm>
