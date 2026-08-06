@@ -98,14 +98,27 @@ const ticketHeaders = [
  * ────────────────────────────────────────────────────────────────────── */
 const canCheckIn = ticket => !ticket?.isCheckedIn && ticket?.status === 'valid'
 
-const checkInTicket = async ticket => {
+/**
+ * Validation manuelle — même geste, mêmes précautions que sur « Billets
+ * vendus » : aucun QR n'est lu, et l'API ne sait pas défaire un check-in.
+ */
+const isCheckInDialogOpen = ref(false)
+const checkingInTicket = ref(null)
+
+const openCheckInDialog = ticket => {
+  checkingInTicket.value = ticket
+  isCheckInDialogOpen.value = true
+}
+
+const confirmCheckIn = async () => {
   isSubmitting.value = true
   try {
-    await $api(`/tickets/${ticket.id}/check-in`, { method: 'POST' })
-    notify('Billet scanné avec succès.')
+    await $api(`/tickets/${checkingInTicket.value.id}/check-in`, { method: 'POST' })
+    isCheckInDialogOpen.value = false
+    notify('Entrée validée.')
     fetchOrder()
   } catch (err) {
-    notify(err?.data?.message ?? 'Impossible de scanner le billet.', 'error')
+    notify(err?.data?.message ?? 'Impossible de valider l\'entrée.', 'error')
   } finally {
     isSubmitting.value = false
   }
@@ -339,7 +352,7 @@ const checkInTicket = async ticket => {
             <template #item.actions="{ item }">
               <VTooltip
                 v-if="canCheckIn(item)"
-                text="Check-in"
+                text="Valider l'entrée (manuel)"
                 location="top"
               >
                 <template #activator="{ props }">
@@ -350,9 +363,9 @@ const checkInTicket = async ticket => {
                     size="small"
                     color="success"
                     :disabled="isSubmitting"
-                    @click="checkInTicket(item)"
+                    @click="openCheckInDialog(item)"
                   >
-                    <VIcon icon="tabler-checkbox" />
+                    <VIcon icon="tabler-door-enter" />
                   </VBtn>
                 </template>
               </VTooltip>
@@ -366,5 +379,47 @@ const checkInTicket = async ticket => {
         </VWindowItem>
       </VWindow>
     </VCard>
+
+    <!-- ─── Dialog Validation manuelle ──────────────────────────────────────── -->
+    <VDialog
+      v-model="isCheckInDialogOpen"
+      max-width="480"
+    >
+      <VCard title="Valider l'entrée">
+        <VCardText class="pt-4">
+          <p class="text-body-2 mb-3">
+            Valider manuellement le billet
+            <strong>{{ checkingInTicket?.ticketNumber }}</strong>
+            <template v-if="checkingInTicket?.attendeeName">
+              ({{ checkingInTicket.attendeeName }})
+            </template>
+            ?
+          </p>
+          <VAlert
+            type="warning"
+            variant="tonal"
+            density="compact"
+          >
+            L'entrée sera enregistrée définitivement, sans scan du QR code.
+          </VAlert>
+        </VCardText>
+        <VCardActions class="justify-end pa-4">
+          <VBtn
+            variant="tonal"
+            color="secondary"
+            @click="isCheckInDialogOpen = false"
+          >
+            Annuler
+          </VBtn>
+          <VBtn
+            color="success"
+            :loading="isSubmitting"
+            @click="confirmCheckIn"
+          >
+            Valider l'entrée
+          </VBtn>
+        </VCardActions>
+      </VCard>
+    </VDialog>
   </div>
 </template>
