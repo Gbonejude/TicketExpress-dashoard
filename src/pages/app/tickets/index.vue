@@ -123,20 +123,35 @@ const statusColor = status => ({
   refunded: 'secondary',
 })[status] ?? 'secondary'
 
-// Ticket actions (check-in / refund)
+// Ticket actions (validation manuelle / remboursement)
 const isSubmitting = ref(false)
 const isRefundDialogOpen = ref(false)
 const refundingTicket = ref(null)
 const refundReason = ref('')
 
-const checkIn = async ticket => {
+/**
+ * Validation manuelle — le recours quand le porteur se présente sans billet
+ * lisible. Ce n'est pas un scan : rien n'est lu, un gestionnaire décide depuis
+ * la liste. D'où la confirmation, car l'API n'offre aucun retour arrière et un
+ * billet consommé par erreur fait refouler son porteur légitime.
+ */
+const isCheckInDialogOpen = ref(false)
+const checkingInTicket = ref(null)
+
+const openCheckInDialog = ticket => {
+  checkingInTicket.value = ticket
+  isCheckInDialogOpen.value = true
+}
+
+const confirmCheckIn = async () => {
   isSubmitting.value = true
   try {
-    await $api(`/tickets/${ticket.id}/check-in`, { method: 'POST' })
-    notify('Ticket scanné avec succès.')
+    await $api(`/tickets/${checkingInTicket.value.id}/check-in`, { method: 'POST' })
+    isCheckInDialogOpen.value = false
+    notify('Entrée validée.')
     fetchTickets()
   } catch (err) {
-    notify(err?.data?.message ?? 'Impossible de scanner le ticket.', 'error')
+    notify(err?.data?.message ?? 'Impossible de valider l\'entrée.', 'error')
   } finally {
     isSubmitting.value = false
   }
@@ -407,7 +422,7 @@ const dlStateLabel = state => ({
 
               <VTooltip
                 v-if="item.status === 'valid' && !item.isCheckedIn"
-                text="Check-in"
+                text="Valider l'entrée (manuel)"
                 location="top"
               >
                 <template #activator="{ props }">
@@ -417,9 +432,10 @@ const dlStateLabel = state => ({
                     variant="text"
                     size="small"
                     color="success"
-                    @click="checkIn(item)"
+                    :disabled="isSubmitting"
+                    @click="openCheckInDialog(item)"
                   >
-                    <VIcon icon="tabler-qrcode" />
+                    <VIcon icon="tabler-door-enter" />
                   </VBtn>
                 </template>
               </VTooltip>
@@ -629,6 +645,48 @@ const dlStateLabel = state => ({
             @click="isShowDialogOpen = false"
           >
             Fermer
+          </VBtn>
+        </VCardActions>
+      </VCard>
+    </VDialog>
+
+    <!-- ─── Dialog Validation manuelle ──────────────────────────────────────── -->
+    <VDialog
+      v-model="isCheckInDialogOpen"
+      max-width="480"
+    >
+      <VCard title="Valider l'entrée">
+        <VCardText class="pt-4">
+          <p class="text-body-2 mb-3">
+            Valider manuellement le billet
+            <strong>{{ checkingInTicket?.ticketNumber }}</strong>
+            <template v-if="checkingInTicket?.attendeeName">
+              ({{ checkingInTicket.attendeeName }})
+            </template>
+            ?
+          </p>
+          <VAlert
+            type="warning"
+            variant="tonal"
+            density="compact"
+          >
+            L'entrée sera enregistrée définitivement, sans scan du QR code.
+          </VAlert>
+        </VCardText>
+        <VCardActions class="justify-end pa-4">
+          <VBtn
+            variant="tonal"
+            color="secondary"
+            @click="isCheckInDialogOpen = false"
+          >
+            Annuler
+          </VBtn>
+          <VBtn
+            color="success"
+            :loading="isSubmitting"
+            @click="confirmCheckIn"
+          >
+            Valider l'entrée
           </VBtn>
         </VCardActions>
       </VCard>
