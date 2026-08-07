@@ -298,7 +298,7 @@ const confirmDelete = async () => {
                   label="Nom technique"
                   placeholder="ex : guichet"
                   :disabled="!!editingRole"
-                  :rules="editingRole ? [] : [requiredValidator]"
+                  :rules="editingRole ? [] : [requiredField('Nom technique')]"
                   :error-messages="formErrors.name"
                   hint="Identifiant unique, non modifiable après création."
                   persistent-hint

@@ -384,7 +384,7 @@ const confirmDelete = async () => {
                   item-value="id"
                   label="Événement"
                   :disabled="!!editingPromo"
-                  :rules="[requiredValidator]"
+                  :rules="[requiredField('Événement')]"
                 />
               </VCol>
 
@@ -396,7 +396,7 @@ const confirmDelete = async () => {
                   item-value="id"
                   label="Type de ticket"
                   :disabled="!!editingPromo || !form.eventId"
-                  :rules="[requiredValidator]"
+                  :rules="[requiredField('Type de ticket')]"
                   :hint="editingPromo ? `Type : ${editingPromo.ticketTypeName}` : ''"
                   persistent-hint
                 />
@@ -440,7 +440,7 @@ const confirmDelete = async () => {
                   type="number"
                   min="0"
                   :label="form.reductionType === 'percentage' ? 'Réduction (%)' : 'Réduction (FCFA)'"
-                  :rules="[requiredValidator]"
+                  :rules="[requiredField('Réduction')]"
                 />
               </VCol>
 
@@ -452,7 +452,7 @@ const confirmDelete = async () => {
                   v-model="form.startDate"
                   type="date"
                   label="Date de début"
-                  :rules="[requiredValidator]"
+                  :rules="[requiredField('Date de début')]"
                   :error-messages="formErrors.promotion_start_date"
                 />
               </VCol>
@@ -464,7 +464,7 @@ const confirmDelete = async () => {
                   v-model="form.endDate"
                   type="date"
                   label="Date de fin"
-                  :rules="[requiredValidator]"
+                  :rules="[requiredField('Date de fin')]"
                   :error-messages="formErrors.promotion_end_date"
                 />
               </VCol>

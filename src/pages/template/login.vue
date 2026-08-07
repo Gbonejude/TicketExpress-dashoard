@@ -107,10 +107,10 @@ const onSubmit = () => {
 
         <VCardText>
           <h4 class="text-h4 mb-1">
-            Welcome to <span class="text-capitalize">{{ themeConfig.app.title }}</span>! 👋🏻
+            Bienvenue sur <span class="text-capitalize">{{ themeConfig.app.title }}</span> ! 
           </h4>
           <p class="mb-0">
-            Please sign-in to your account
+            Connectez-vous à votre compte pour continuer
           </p>
         </VCardText>
 
@@ -128,7 +128,7 @@ const onSubmit = () => {
                   label="Email"
                   type="email"
                   placeholder="johndoe@email.com"
-                  :rules="[requiredValidator, emailValidator]"
+                  :rules="[requiredField('Email'), emailValidator]"
                   :error-messages="errors.email"
                 />
               </VCol>
@@ -137,9 +137,9 @@ const onSubmit = () => {
               <VCol cols="12">
                 <AppTextField
                   v-model="credentials.password"
-                  label="Password"
+                  label="Mot de passe"
                   placeholder="············"
-                  :rules="[requiredValidator]"
+                  :rules="[requiredField('Mot de passe')]"
                   :type="isPasswordVisible ? 'text' : 'password'"
                   :error-messages="errors.password"
                   :append-inner-icon="isPasswordVisible ? 'tabler-eye-off' : 'tabler-eye'"

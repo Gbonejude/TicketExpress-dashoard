@@ -97,9 +97,9 @@ const isPasswordVisible = ref(false)
               <VCol cols="12">
                 <AppTextField
                   v-model="form.username"
-                  :rules="[requiredValidator]"
+                  :rules="[requiredField('Nom d\'utilisateur')]"
                   autofocus
-                  label="Username"
+                  label="Nom d'utilisateur"
                   placeholder="Johndoe"
                 />
               </VCol>
@@ -108,7 +108,7 @@ const isPasswordVisible = ref(false)
               <VCol cols="12">
                 <AppTextField
                   v-model="form.email"
-                  :rules="[requiredValidator, emailValidator]"
+                  :rules="[requiredField('Email'), emailValidator]"
                   label="Email"
                   type="email"
                   placeholder="johndoe@email.com"
@@ -119,8 +119,8 @@ const isPasswordVisible = ref(false)
               <VCol cols="12">
                 <AppTextField
                   v-model="form.password"
-                  :rules="[requiredValidator]"
-                  label="Password"
+                  :rules="[requiredField('Mot de passe')]"
+                  label="Mot de passe"
                   placeholder="············"
                   :type="isPasswordVisible ? 'text' : 'password'"
                   :append-inner-icon="isPasswordVisible ? 'tabler-eye-off' : 'tabler-eye'"

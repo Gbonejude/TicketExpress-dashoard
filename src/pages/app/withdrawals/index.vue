@@ -533,7 +533,7 @@ const confirmDelete = async () => {
                   item-title="companyName"
                   item-value="id"
                   label="Organisateur"
-                  :rules="[requiredValidator]"
+                  :rules="[requiredField('Organisateur')]"
                   :error-messages="formErrors.organizer_id"
                 />
               </VCol>
@@ -577,7 +577,7 @@ const confirmDelete = async () => {
                   type="tel"
                   label="Numéro du demandeur"
                   placeholder="+22890112233"
-                  :rules="[requiredValidator]"
+                  :rules="[requiredField('Numéro du demandeur')]"
                   :error-messages="formErrors.requester_phone"
                 />
               </VCol>
@@ -595,7 +595,7 @@ const confirmDelete = async () => {
                   :hint="balance ? `Maximum ${formatPrice(available)}` : ''"
                   persistent-hint
                   :rules="[
-                    requiredValidator,
+                    requiredField('Montant (FCFA)'),
                     v => (v > 0) || 'Le montant doit être au moins 1.',
                     () => !exceedsBalance || `Le solde disponible est de ${formatPrice(available)}.`,
                   ]"
@@ -614,7 +614,7 @@ const confirmDelete = async () => {
                   item-value="value"
                   label="Méthode de paiement"
                   placeholder="Choisir Flooz ou Mix by Yas"
-                  :rules="[requiredValidator]"
+                  :rules="[requiredField('Méthode de paiement')]"
                   :error-messages="formErrors.payment_method"
                 />
               </VCol>
@@ -677,7 +677,7 @@ const confirmDelete = async () => {
               item-title="label"
               item-value="value"
               label="Nouveau statut"
-              :rules="[requiredValidator]"
+              :rules="[requiredField('Nouveau statut')]"
             />
 
             <VTextField
@@ -686,7 +686,7 @@ const confirmDelete = async () => {
               label="Référence du transfert"
               placeholder="Identifiant rendu par Flooz / Mix by Yas"
               class="mt-4"
-              :rules="[requiredValidator]"
+              :rules="[requiredField('Référence du transfert')]"
               persistent-hint
               hint="Preuve du virement : à présenter si l'organisateur dit n'avoir rien reçu."
             />

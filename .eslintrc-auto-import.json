@@ -365,6 +365,7 @@
     "notifyError": true,
     "notifySuccess": true,
     "formatBucket": true,
-    "formatPrice": true
+    "formatPrice": true,
+    "requiredField": true
   }
 }

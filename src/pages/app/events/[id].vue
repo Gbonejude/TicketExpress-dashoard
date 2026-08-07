@@ -993,7 +993,7 @@ const statsHeaders = [
                   v-model="occForm.start_date"
                   label="Date et heure de début"
                   type="datetime-local"
-                  :rules="[requiredValidator]"
+                  :rules="[requiredField('Date et heure de début')]"
                   :error-messages="occErrors.start_date"
                 />
               </VCol>
@@ -1005,7 +1005,7 @@ const statsHeaders = [
                   v-model="occForm.end_date"
                   label="Date et heure de fin"
                   type="datetime-local"
-                  :rules="[requiredValidator]"
+                  :rules="[requiredField('Date et heure de fin')]"
                   :error-messages="occErrors.end_date"
                 />
               </VCol>
@@ -1135,7 +1135,7 @@ const statsHeaders = [
                   v-model="ticketForm.name"
                   label="Nom"
                   placeholder="VIP, Standard, Early Bird..."
-                  :rules="[requiredValidator]"
+                  :rules="[requiredField('Nom')]"
                   :error-messages="ticketErrors.name"
                 />
               </VCol>
@@ -1169,7 +1169,7 @@ const statsHeaders = [
                   label="Prix (FCFA)"
                   type="number"
                   min="0"
-                  :rules="[requiredValidator]"
+                  :rules="[requiredField('Prix (FCFA)')]"
                   :error-messages="ticketErrors.price"
                 />
               </VCol>
@@ -1182,7 +1182,7 @@ const statsHeaders = [
                   label="Quantité"
                   type="number"
                   min="1"
-                  :rules="[requiredValidator]"
+                  :rules="[requiredField('Quantité')]"
                   :error-messages="ticketErrors.quantity"
                 />
               </VCol>

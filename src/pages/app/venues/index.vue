@@ -331,7 +331,7 @@ const confirmDelete = async () => {
                 <VTextField
                   v-model="form.name"
                   label="Nom du lieu"
-                  :rules="[requiredValidator, v => !v || v.length <= 255 || 'Maximum 255 caractères']"
+                  :rules="[requiredField('Nom du lieu'), v => !v || v.length <= 255 || 'Maximum 255 caractères']"
                   :error-messages="errors.name"
                   required
                 />
@@ -341,7 +341,7 @@ const confirmDelete = async () => {
                   v-model="form.address"
                   label="Adresse"
                   rows="2"
-                  :rules="[requiredValidator]"
+                  :rules="[requiredField('Adresse')]"
                   :error-messages="errors.address"
                   required
                 />
@@ -353,7 +353,7 @@ const confirmDelete = async () => {
                 <VTextField
                   v-model="form.city"
                   label="Ville"
-                  :rules="[requiredValidator, v => !v || v.length <= 255 || 'Maximum 255 caractères']"
+                  :rules="[requiredField('Ville'), v => !v || v.length <= 255 || 'Maximum 255 caractères']"
                   :error-messages="errors.city"
                   required
                 />
@@ -379,7 +379,7 @@ const confirmDelete = async () => {
                   label="Capacité"
                   type="number"
                   min="1"
-                  :rules="[requiredValidator, integerValidator, v => !v || v >= 1 || 'La capacité doit être au moins 1']"
+                  :rules="[requiredField('Capacité'), integerValidator, v => !v || v >= 1 || 'La capacité doit être au moins 1']"
                   :error-messages="errors.capacity"
                   required
                 />

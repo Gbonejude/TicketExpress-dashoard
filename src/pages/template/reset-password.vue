@@ -146,7 +146,7 @@ const onSubmit = async () => {
                   placeholder="············"
                   :type="isPasswordVisible ? 'text' : 'password'"
                   :append-inner-icon="isPasswordVisible ? 'tabler-eye-off' : 'tabler-eye'"
-                  :rules="[requiredValidator, passwordValidator]"
+                  :rules="[requiredField('Nouveau mot de passe'), passwordValidator]"
                   :error-messages="errors.password"
                   @click:append-inner="isPasswordVisible = !isPasswordVisible"
                 />
@@ -161,7 +161,7 @@ const onSubmit = async () => {
                   :type="isConfirmPasswordVisible ? 'text' : 'password'"
                   :append-inner-icon="isConfirmPasswordVisible ? 'tabler-eye-off' : 'tabler-eye'"
                   :rules="[
-                    requiredValidator,
+                    requiredField('Confirmer le mot de passe'),
                     confirmedValidator(form.confirmPassword, form.newPassword),
                   ]"
                   @click:append-inner="isConfirmPasswordVisible = !isConfirmPasswordVisible"

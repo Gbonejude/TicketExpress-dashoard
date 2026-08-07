@@ -885,7 +885,7 @@ const confirmDelete = async () => {
                   item-title="companyName"
                   item-value="id"
                   label="Organisateur"
-                  :rules="[requiredValidator]"
+                  :rules="[requiredField('Organisateur')]"
                   :error-messages="formErrors.organizer_id"
                 />
               </VCol>
@@ -899,7 +899,7 @@ const confirmDelete = async () => {
                   item-title="name"
                   item-value="id"
                   label="Catégorie"
-                  :rules="[requiredValidator]"
+                  :rules="[requiredField('Catégorie')]"
                   :error-messages="formErrors.category_id"
                 />
               </VCol>
@@ -940,7 +940,7 @@ const confirmDelete = async () => {
                   v-model="form.online_url"
                   label="Lien de l'événement en ligne"
                   placeholder="https://…"
-                  :rules="[requiredValidator, urlValidator]"
+                  :rules="[requiredField('Lien de l\'événement en ligne'), urlValidator]"
                   :error-messages="formErrors.online_url"
                 />
               </VCol>
@@ -962,7 +962,7 @@ const confirmDelete = async () => {
                   v-model="form.title"
                   label="Titre"
                   counter="255"
-                  :rules="[requiredValidator]"
+                  :rules="[requiredField('Titre')]"
                   :error-messages="formErrors.title"
                 />
               </VCol>
@@ -971,7 +971,7 @@ const confirmDelete = async () => {
                   v-model="form.slug"
                   label="Slug"
                   counter="255"
-                  :rules="[requiredValidator]"
+                  :rules="[requiredField('Slug')]"
                   :error-messages="formErrors.slug"
                   @input="slugEdited = true"
                 />
@@ -981,7 +981,7 @@ const confirmDelete = async () => {
                   v-model="form.description"
                   label="Description"
                   rows="3"
-                  :rules="[requiredValidator]"
+                  :rules="[requiredField('Description')]"
                   :error-messages="formErrors.description"
                 />
               </VCol>
@@ -993,7 +993,7 @@ const confirmDelete = async () => {
                   v-model="form.start_date"
                   label="Date de début"
                   type="datetime-local"
-                  :rules="[requiredValidator]"
+                  :rules="[requiredField('Date de début')]"
                   :error-messages="formErrors.start_date"
                 />
               </VCol>
@@ -1005,7 +1005,7 @@ const confirmDelete = async () => {
                   v-model="form.end_date"
                   label="Date de fin"
                   type="datetime-local"
-                  :rules="[requiredValidator]"
+                  :rules="[requiredField('Date de fin')]"
                   :error-messages="formErrors.end_date"
                 />
               </VCol>

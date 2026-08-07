@@ -530,7 +530,7 @@ const confirmDelete = async () => {
                 <VTextField
                   v-model="form.code"
                   label="Code"
-                  :rules="[requiredValidator, v => maxLengthValidator(v, 255)]"
+                  :rules="[requiredField('Code'), v => maxLengthValidator(v, 255)]"
                   :error-messages="fieldErrors.code"
                   required
                 />
@@ -543,7 +543,7 @@ const confirmDelete = async () => {
                   v-model="form.type"
                   label="Type"
                   :items="typeOptions"
-                  :rules="[requiredValidator]"
+                  :rules="[requiredField('Type')]"
                   :error-messages="fieldErrors.type"
                   required
                 />
@@ -557,7 +557,7 @@ const confirmDelete = async () => {
                   type="number"
                   min="0"
                   :label="form.type === 'percent' ? 'Valeur (%)' : 'Valeur (FCFA)'"
-                  :rules="[requiredValidator, positiveValidator]"
+                  :rules="[requiredField('Valeur'), positiveValidator]"
                   :error-messages="fieldErrors.value"
                   required
                 />
@@ -571,7 +571,7 @@ const confirmDelete = async () => {
                   type="number"
                   min="1"
                   label="Utilisation maximale"
-                  :rules="[requiredValidator, minUsageValidator]"
+                  :rules="[requiredField('Utilisation maximale'), minUsageValidator]"
                   :error-messages="fieldErrors.max_usage"
                   required
                 />
@@ -584,7 +584,7 @@ const confirmDelete = async () => {
                   v-model="form.start_date"
                   type="datetime-local"
                   label="Date de début"
-                  :rules="[requiredValidator]"
+                  :rules="[requiredField('Date de début')]"
                   :error-messages="fieldErrors.start_date"
                   required
                 />
@@ -597,7 +597,7 @@ const confirmDelete = async () => {
                   v-model="form.end_date"
                   type="datetime-local"
                   label="Date de fin"
-                  :rules="[requiredValidator, endAfterStartValidator]"
+                  :rules="[requiredField('Date de fin'), endAfterStartValidator]"
                   :error-messages="fieldErrors.end_date"
                   required
                 />

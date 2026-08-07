@@ -278,7 +278,7 @@ const confirmDelete = async () => {
                 <VTextField
                   v-model="form.name"
                   label="Nom"
-                  :rules="[requiredValidator, v => maxLengthValidator(v, 255)]"
+                  :rules="[requiredField('Nom'), v => maxLengthValidator(v, 255)]"
                   :error-messages="fieldErrors.name"
                   required
                 />
@@ -289,7 +289,7 @@ const confirmDelete = async () => {
                   label="Slug"
                   hint="Généré automatiquement depuis le nom, modifiable"
                   persistent-hint
-                  :rules="[requiredValidator, v => maxLengthValidator(v, 255)]"
+                  :rules="[requiredField('Slug'), v => maxLengthValidator(v, 255)]"
                   :error-messages="fieldErrors.slug"
                   required
                   @input="onSlugInput"
