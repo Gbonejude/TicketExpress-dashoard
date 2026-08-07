@@ -363,6 +363,8 @@
     "notify": true,
     "notifyApiError": true,
     "notifyError": true,
-    "notifySuccess": true
+    "notifySuccess": true,
+    "formatBucket": true,
+    "formatPrice": true
   }
 }

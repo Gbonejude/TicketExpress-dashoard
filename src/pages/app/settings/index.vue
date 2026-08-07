@@ -20,6 +20,7 @@ const loadSettings = async () => {
   isLoading.value = true
   try {
     const res = await $api('/settings')
+
     commissionPercent.value = res?.data?.commissionPercent ?? 5
   } catch (err) {
     notify(err?.data?.message ?? 'Impossible de charger les paramètres.', 'error')
@@ -38,8 +39,13 @@ const saveSettings = async () => {
   try {
     const res = await $api('/settings', {
       method: 'PUT',
+
+      // La clé du corps de requête est celle de l'API, en snake_case comme
+      // partout ailleurs côté serveur ; seules les réponses sont en camelCase.
+      // eslint-disable-next-line camelcase
       body: { commission_rate: Number(commissionPercent.value) / 100 },
     })
+
     commissionPercent.value = res?.data?.commissionPercent ?? commissionPercent.value
     notify('Paramètres enregistrés.')
   } catch (err) {
@@ -124,6 +130,5 @@ const saveSettings = async () => {
         </VForm>
       </VCardText>
     </VCard>
-
   </div>
 </template>

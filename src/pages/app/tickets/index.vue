@@ -24,6 +24,7 @@ const checkinFilter = ref(null)
 const statusOptions = [
   { title: 'Valide', value: 'valid' },
   { title: 'Utilisé', value: 'used' },
+  { title: 'Expiré', value: 'expired' },
   { title: 'Annulé', value: 'cancelled' },
   { title: 'Remboursé', value: 'refunded' },
 ]
@@ -121,6 +122,11 @@ const statusColor = status => ({
   used: 'info',
   cancelled: 'error',
   refunded: 'secondary',
+
+  // Une place vendue et jamais consommée : ni une erreur (error), ni une
+  // décision (secondary comme un remboursement). Un avertissement — c'est de
+  // l'argent encaissé pour un siège resté vide.
+  expired: 'warning',
 })[status] ?? 'secondary'
 
 // Ticket actions (validation manuelle / remboursement)

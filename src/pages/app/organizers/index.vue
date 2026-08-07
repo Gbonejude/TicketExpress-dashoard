@@ -1,6 +1,13 @@
 <script setup>
 import { notify } from '@/utils/toast'
 
+/*
+ * Les clés du formulaire recopient volontairement celles de l'API, en
+ * snake_case : le payload part tel quel, et traduire dans les deux sens
+ * ajouterait une table de correspondance à tenir à jour pour rien.
+ */
+/* eslint-disable camelcase */
+
 definePage({
   meta: {
     action: 'read',
@@ -35,6 +42,11 @@ const form = reactive({
   description: '',
   website: '',
   status: '',
+
+  // Marges de contrôle d'accès appliquées par défaut à ses événements. Vides =
+  // valeur d'usine (4 h de part et d'autre).
+  checkin_open_hours_before: '',
+  checkin_close_hours_after: '',
 })
 
 const headers = [
@@ -89,6 +101,8 @@ const resetForm = () => {
   form.description = ''
   form.website = ''
   form.status = ''
+  form.checkin_open_hours_before = ''
+  form.checkin_close_hours_after = ''
   formErrors.value = {}
   logoFile.value = null
   logoPreview.value = null
@@ -122,6 +136,11 @@ const openEditDialog = organizer => {
   form.description = organizer.description ?? ''
   form.website = organizer.website ?? ''
   form.status = organizer.status ?? ''
+
+  // `?? ''` et non `?? 4` : vide veut dire « je n'ai rien réglé », et l'afficher
+  // rempli laisserait croire à un choix qui n'a pas été fait.
+  form.checkin_open_hours_before = organizer.checkinOpenHoursBefore ?? ''
+  form.checkin_close_hours_after = organizer.checkinCloseHoursAfter ?? ''
   logoPreview.value = organizer.logoThumbnail ? toMediaUrl(organizer.logoThumbnail) : (organizer.logo ? toMediaUrl(organizer.logo) : null)
   fetchUsers()
   isFormDialogOpen.value = true
@@ -132,6 +151,15 @@ const openDeleteDialog = organizer => {
   isDeleteDialogOpen.value = true
 }
 
+/**
+ * Champs qu'il faut transmettre même vides.
+ *
+ * Une clé absente laisse la valeur en base intacte : sans ça, une marge posée
+ * une fois ne pourrait plus jamais être retirée. Le middleware
+ * ConvertEmptyStringsToNull de Laravel retraduit la chaîne vide en null.
+ */
+const CHECKIN_KEYS = ['checkin_open_hours_before', 'checkin_close_hours_after']
+
 const buildFormData = () => {
   const formData = new FormData()
 
@@ -140,6 +168,11 @@ const buildFormData = () => {
       formData.append(key, String(val))
     }
   })
+
+  CHECKIN_KEYS.forEach(key => {
+    if (!formData.has(key)) formData.append(key, '')
+  })
+
   if (logoFile.value) formData.append('logo', logoFile.value)
 
   return formData
@@ -586,6 +619,53 @@ const confirmDelete = async () => {
                   label="Statut"
                   clearable
                   :error-messages="formErrors.status"
+                />
+              </VCol>
+
+              <!-- Contrôle d'accès -->
+              <VCol cols="12">
+                <VDivider class="mb-2" />
+                <div class="text-subtitle-2 font-weight-medium mb-1">
+                  Contrôle d'accès
+                </div>
+                <div class="text-caption text-medium-emphasis">
+                  Quand les billets peuvent être validés à l'entrée, pour tous les
+                  événements de cet organisateur. Un événement particulier peut
+                  s'en écarter à sa création. Par défaut : 4 h de part et d'autre.
+                </div>
+              </VCol>
+              <VCol
+                cols="12"
+                md="6"
+              >
+                <VTextField
+                  v-model="form.checkin_open_hours_before"
+                  type="number"
+                  min="0"
+                  max="168"
+                  step="0.5"
+                  label="Ouverture avant le début"
+                  suffix="h"
+                  placeholder="4"
+                  persistent-placeholder
+                  :error-messages="formErrors.checkin_open_hours_before"
+                />
+              </VCol>
+              <VCol
+                cols="12"
+                md="6"
+              >
+                <VTextField
+                  v-model="form.checkin_close_hours_after"
+                  type="number"
+                  min="0"
+                  max="168"
+                  step="0.5"
+                  label="Fermeture après la fin"
+                  suffix="h"
+                  placeholder="4"
+                  persistent-placeholder
+                  :error-messages="formErrors.checkin_close_hours_after"
                 />
               </VCol>
             </VRow>

@@ -1,6 +1,13 @@
 <script setup>
 import { notify, notifyApiError } from '@/utils/toast'
 
+/*
+ * Les clés du formulaire recopient volontairement celles de l'API, en
+ * snake_case : le payload part tel quel, et traduire dans les deux sens
+ * ajouterait une table de correspondance à tenir à jour pour rien.
+ */
+/* eslint-disable camelcase */
+
 import { formatDateFr } from '@/utils/dateFormat'
 
 definePage({
@@ -51,6 +58,11 @@ const form = reactive({
   online_url: '',
   refund_allowed: true,
   refund_days_before: 0,
+
+  // Vides = « hérite des réglages de la plateforme ». Voir CHECKIN_KEYS plus bas
+  // pour la raison pour laquelle ces deux-là sont transmis même vides.
+  checkin_open_hours_before: '',
+  checkin_close_hours_after: '',
 })
 
 const eventTypeOptions = [
@@ -203,9 +215,30 @@ watch(() => form.title, val => {
   form.slug = slugify(val)
 })
 
+// ─── Compte connecté ───────────────────────────────────────────────────────
+/**
+ * Un organisateur connecté crée ses propres événements : lui parler de
+ * « l'organisateur » à la troisième personne le ferait chercher qui c'est, et
+ * lui faire choisir dans une liste ce qu'il est déjà n'a pas de sens.
+ */
+const currentUser = useCookie('userData')
+const isOrganizerUser = computed(() => currentUser.value?.role === 'organizer-manager')
+const currentOrganizer = computed(() => currentUser.value?.organizer ?? null)
+
+/**
+ * On ne masque le sélecteur que si l'on sait par quoi le remplacer.
+ *
+ * `organizer` n'a été ajouté à la session qu'après coup : les comptes déjà
+ * connectés ont un cookie qui ne le porte pas. Plutôt que de casser la création
+ * pour eux jusqu'à leur prochaine reconnexion, on leur laisse la liste.
+ */
+const hideOrganizerSelect = computed(() => isOrganizerUser.value && !!currentOrganizer.value?.id)
+
 // ─── Form lifecycle ────────────────────────────────────────────────────────
 const resetForm = () => {
-  form.organizer_id = ''
+  // Pré-rempli pour un organisateur : le champ ne lui est pas montré, mais
+  // l'API l'exige.
+  form.organizer_id = hideOrganizerSelect.value ? currentOrganizer.value.id : ''
   form.category_id = ''
   form.venue_id = null
   form.title = ''
@@ -219,6 +252,8 @@ const resetForm = () => {
   form.online_url = ''
   form.refund_allowed = true
   form.refund_days_before = 0
+  form.checkin_open_hours_before = ''
+  form.checkin_close_hours_after = ''
   bannerFile.value = null
   bannerPreview.value = null
   slugEdited.value = false
@@ -261,6 +296,11 @@ const openEditDialog = event => {
   form.online_url = event.onlineUrl ?? ''
   form.refund_allowed = event.refundAllowed ?? true
   form.refund_days_before = event.refundDaysBefore ?? 0
+
+  // `?? ''` et non `?? 0` : null veut dire « hérite », zéro voudrait dire « le
+  // portique n'ouvre pas une minute avant l'heure ».
+  form.checkin_open_hours_before = event.checkinOpenHoursBefore ?? ''
+  form.checkin_close_hours_after = event.checkinCloseHoursAfter ?? ''
   bannerFile.value = null
   bannerPreview.value = toMediaUrl(event.bannerThumbnail || event.banner) ?? null
   slugEdited.value = true
@@ -277,16 +317,87 @@ const openDeleteDialog = event => {
   isDeleteDialogOpen.value = true
 }
 
+/**
+ * Valeur d'usine des marges de contrôle d'accès, en heures.
+ *
+ * Recopiée de `config/ticketexpress.php` côté serveur, uniquement pour dire à
+ * quoi un champ vide va retomber. C'est le serveur qui tranche.
+ */
+const FACTORY_CHECKIN_HOURS = 4
+
+const selectedOrganizer = computed(() =>
+  organizerOptions.value.find(o => o.id === form.organizer_id)
+  ?? (currentOrganizer.value?.id === form.organizer_id ? currentOrganizer.value : null))
+
+/**
+ * Ce dont l'événement hérite quand le champ reste vide : la façon de faire de
+ * l'organisateur, ou la valeur d'usine s'il n'a rien réglé. Montrer le nombre
+ * plutôt que « suit le réglage » évite d'aller le chercher ailleurs.
+ */
+const inheritedHours = key =>
+  selectedOrganizer.value?.[key] ?? FACTORY_CHECKIN_HOURS
+
+const inheritedHint = (key, side) => isOrganizerUser.value
+  ? `Vos réglages : ${inheritedHours(key)} h ${side}`
+  : `Réglages de l'organisateur : ${inheritedHours(key)} h ${side}`
+
+const inheritedOpenHint = computed(() => inheritedHint('checkinOpenHoursBefore', 'avant'))
+const inheritedCloseHint = computed(() => inheritedHint('checkinCloseHoursAfter', 'après'))
+
+/**
+ * Ce que donnent les marges saisies, en horaires.
+ *
+ * Un organisateur pense « les portes ouvrent à 18 h », pas « quatre heures
+ * avant ». On stocke la marge — elle suit l'événement si on en décale la date,
+ * là où un horaire absolu se désynchronise en silence — mais on lui montre
+ * l'heure pendant qu'il saisit.
+ */
+const gateTime = (dateField, hours, direction) => {
+  if (hours === '' || hours === null || !form[dateField]) return null
+
+  const base = new Date(form[dateField])
+
+  if (Number.isNaN(base.getTime())) return null
+
+  base.setMinutes(base.getMinutes() + direction * Math.round(Number(hours) * 60))
+
+  return base.toLocaleString('fr-FR', {
+    weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit',
+  })
+}
+
+const gateOpensAt = computed(() => gateTime('start_date', form.checkin_open_hours_before, -1))
+const gateClosesAt = computed(() => gateTime('end_date', form.checkin_close_hours_after, 1))
+
 // ─── Payload builders ──────────────────────────────────────────────────────
 const meaningfulEntries = () =>
   Object.entries(form).filter(([, v]) => v !== '' && v !== null && v !== undefined)
 
-const buildPayload = () => Object.fromEntries(meaningfulEntries())
+/**
+ * Champs qu'il faut transmettre même vides.
+ *
+ * `meaningfulEntries` élague les valeurs vides, ce qui convient à la création.
+ * Mais à la modification, une clé absente laisse la valeur en base intacte :
+ * l'organisateur ne pourrait jamais *retirer* une surcharge une fois posée. Ces
+ * deux-là partent donc toujours, à vide quand le champ l'est — l'API le lit
+ * comme null, c'est-à-dire « hérite de la plateforme ».
+ */
+const CHECKIN_KEYS = ['checkin_open_hours_before', 'checkin_close_hours_after']
+
+const buildPayload = () => ({
+  ...Object.fromEntries(meaningfulEntries()),
+  ...Object.fromEntries(CHECKIN_KEYS.map(key => [key, form[key] === '' ? null : Number(form[key])])),
+})
 
 const buildFormData = () => {
   const fd = new FormData()
 
   meaningfulEntries().forEach(([key, val]) => { fd.append(key, String(val)) })
+
+  // Une chaîne vide, faute de pouvoir transporter null en multipart. Le
+  // middleware ConvertEmptyStringsToNull de Laravel la retraduit en null.
+  CHECKIN_KEYS.forEach(key => { if (!fd.has(key)) fd.append(key, '') })
+
   if (bannerFile.value) fd.append('banner', bannerFile.value)
 
   return fd
@@ -758,7 +869,13 @@ const confirmDelete = async () => {
                 >
               </VCol>
 
+              <!--
+                Masqué pour un organisateur connecté : il ne peut créer que pour
+                lui-même, et `organizer_id` est déjà pré-rempli. Le champ reste
+                pour l'administration, qui crée au nom d'autrui.
+              -->
               <VCol
+                v-if="!hideOrganizerSelect"
                 cols="12"
                 md="6"
               >
@@ -938,6 +1055,55 @@ const confirmDelete = async () => {
                   hint="0 = jusqu'au jour de l'événement"
                   persistent-hint
                   :error-messages="formErrors.refund_days_before"
+                />
+              </VCol>
+
+              <!-- Contrôle d'accès -->
+              <VCol cols="12">
+                <VDivider class="mb-2" />
+                <div class="text-subtitle-2 font-weight-medium mb-1">
+                  Contrôle d'accès
+                </div>
+                <div class="text-caption text-medium-emphasis">
+                  À ne remplir que si cet événement fait exception.
+                </div>
+              </VCol>
+              <VCol
+                cols="12"
+                md="6"
+              >
+                <VTextField
+                  v-model="form.checkin_open_hours_before"
+                  type="number"
+                  min="0"
+                  max="168"
+                  step="0.5"
+                  label="Ouverture avant le début"
+                  suffix="h"
+                  :placeholder="String(inheritedHours('checkinOpenHoursBefore'))"
+                  persistent-placeholder
+                  :hint="gateOpensAt ? `Ouvre le ${gateOpensAt}` : inheritedOpenHint"
+                  persistent-hint
+                  :error-messages="formErrors.checkin_open_hours_before"
+                />
+              </VCol>
+              <VCol
+                cols="12"
+                md="6"
+              >
+                <VTextField
+                  v-model="form.checkin_close_hours_after"
+                  type="number"
+                  min="0"
+                  max="168"
+                  step="0.5"
+                  label="Fermeture après la fin"
+                  suffix="h"
+                  :placeholder="String(inheritedHours('checkinCloseHoursAfter'))"
+                  persistent-placeholder
+                  :hint="gateClosesAt ? `Ferme le ${gateClosesAt}` : inheritedCloseHint"
+                  persistent-hint
+                  :error-messages="formErrors.checkin_close_hours_after"
                 />
               </VCol>
             </VRow>
