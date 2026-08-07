@@ -14,6 +14,13 @@ const props = defineProps({
 
   /** Combien de lignes afficher — la carte n'a pas la hauteur pour dix. */
   limit: { type: Number, default: 5 },
+
+  /**
+   * Nommer l'organisateur sous chaque titre. Faux quand l'écran est déjà borné
+   * à un seul : répéter son nom cinq fois ne dit rien, et vole la place au
+   * nombre de billets.
+   */
+  showOrganizer: { type: Boolean, default: true },
 })
 
 const router = useRouter()
@@ -24,6 +31,12 @@ const formatPrice = value =>
   `${new Intl.NumberFormat('fr-FR').format(Math.round(Number(value ?? 0)))} FCFA`
 
 const formatNumber = value => new Intl.NumberFormat('fr-FR').format(Number(value ?? 0))
+
+const subtitle = event => {
+  const tickets = `${formatNumber(event.tickets)} billet(s)`
+
+  return props.showOrganizer ? `${event.organizer} · ${tickets}` : tickets
+}
 
 const openStats = event => router.push(`/events/${event.eventId}?tab=stats`)
 </script>
@@ -69,7 +82,7 @@ const openStats = event => router.push(`/events/${event.eventId}?tab=stats`)
             {{ event.title }}
           </VListItemTitle>
           <VListItemSubtitle>
-            {{ event.organizer }} · {{ formatNumber(event.tickets) }} billet(s)
+            {{ subtitle(event) }}
           </VListItemSubtitle>
 
           <template #append>

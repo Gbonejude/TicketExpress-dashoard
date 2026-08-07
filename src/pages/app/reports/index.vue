@@ -1,6 +1,7 @@
 <script setup>
 import { $api, toMediaUrl } from '@/utils/api'
 import { notifyApiError } from '@/utils/toast'
+import { useCurrentOrganizer } from '@/composables/useCurrentOrganizer'
 
 definePage({
   meta: {
@@ -21,6 +22,20 @@ definePage({
  * dimensions de la billetterie — organisateur, événement, participant — au lieu
  * de restaurant, livreur et coursier.
  */
+/**
+ * Un organisateur ne choisit pas d'organisateur.
+ *
+ * Le sélecteur lui était présenté comme aux administrateurs, alors que l'API le
+ * borne de toute façon à ses propres chiffres — y compris s'il désigne
+ * explicitement un confrère. Il pouvait donc sélectionner un autre nom et voir
+ * ses propres données : le filtre semblait cassé, alors qu'il faisait exactement
+ * son travail.
+ *
+ * Le garde est commun aux quatre écrans qui posaient la question — voir
+ * `useCurrentOrganizer`.
+ */
+const { canChooseOrganizer } = useCurrentOrganizer()
+
 const filterType = ref('month')
 const organizerId = ref(null)
 const eventId = ref(null)
@@ -71,7 +86,12 @@ const statusOptions = [
 ]
 
 /** Listes déroulantes : 100 par page, pour ne pas tronquer le choix. */
-const { data: organizersData } = useApi('/organizers?page=1&per_page=100')
+// Pas de liste d'organisateurs à charger pour qui ne peut pas en choisir un :
+// c'est une requête de plus sur un écran qui en lance déjà cinq.
+const { data: organizersData } = canChooseOrganizer.value
+  ? useApi('/organizers?page=1&per_page=100')
+  : { data: ref(null) }
+
 const { data: eventsData } = useApi('/events?page=1&per_page=100')
 const { data: participantsData } = useApi('/participants?page=1&per_page=100&sort=spent')
 
@@ -205,7 +225,10 @@ const statCards = computed(() => [
     value: formatPrice(totals.value.commission), icon: 'tabler-percentage', color: 'primary',
   },
   {
-    label: 'Net organisateurs', value: formatPrice(totals.value.netRevenue),
+    // « Net organisateurs » se lit comme la part versée à d'autres quand l'écran
+    // est déjà borné à un seul — et c'est précisément la sienne.
+    label: canChooseOrganizer.value ? 'Net organisateurs' : 'Net à vous reverser',
+    value: formatPrice(totals.value.netRevenue),
     icon: 'tabler-wallet', color: 'info',
   },
   {
@@ -345,6 +368,7 @@ const methodLabel = method => ({
           </VCol>
 
           <VCol
+            v-if="canChooseOrganizer"
             cols="12"
             sm="6"
             md="2"
@@ -500,7 +524,13 @@ const methodLabel = method => ({
             <thead>
               <tr>
                 <th>Événement</th>
-                <th>Organisateur</th>
+                <!--
+                  Une colonne qui répète le même nom à chaque ligne n'apprend
+                  rien : pour un organisateur, ce palmarès est le sien.
+                -->
+                <th v-if="canChooseOrganizer">
+                  Organisateur
+                </th>
                 <th class="text-end">
                   Billets
                 </th>
@@ -551,7 +581,10 @@ const methodLabel = method => ({
                     <span class="font-weight-medium">{{ event.title }}</span>
                   </div>
                 </td>
-                <td class="text-medium-emphasis">
+                <td
+                  v-if="canChooseOrganizer"
+                  class="text-medium-emphasis"
+                >
                   {{ event.organizer }}
                 </td>
                 <td class="text-end">

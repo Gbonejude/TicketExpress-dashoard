@@ -1,5 +1,6 @@
 <script setup>
 import { toMediaUrl } from '@/utils/api'
+import { useCurrentOrganizer } from '@/composables/useCurrentOrganizer'
 import TeAverageBasketTrend from '@/views/dashboard/TeAverageBasketTrend.vue'
 import TeOrdersDonut from '@/views/dashboard/TeOrdersDonut.vue'
 import TePaymentMethods from '@/views/dashboard/TePaymentMethods.vue'
@@ -71,6 +72,16 @@ const { data: platformData, execute: fetchPlatform } = useApi('/reports/platform
 const ability = useAbility()
 
 const canSeeWithdrawals = computed(() => ability.can('read', 'withdrawals'))
+
+/**
+ * L'écran d'un organisateur ne parle que de lui.
+ *
+ * Les chiffres le sont déjà — `reports/overview` et `reports/platform` bornent
+ * tout à l'organisateur de la session, quoi qu'on leur demande. Restaient les
+ * mots : « Net organisateurs » se lit comme la part versée à d'autres, et le
+ * palmarès répétait le même nom à chaque ligne.
+ */
+const { isScopedToOwnOrganizer, canChooseOrganizer } = useCurrentOrganizer()
 
 const { data: withdrawalsData } = canSeeWithdrawals.value
   ? useApi('/withdrawals?status=pending')
@@ -190,7 +201,8 @@ const goToCheckIn = event => router.push(`/events/${event.id}?tab=check-in`)
             dont {{ formatPrice(totals.commission) }} de commission
           </p>
           <p class="text-body-2 mb-1">
-            Net organisateurs : {{ formatPrice(totals.netRevenue) }}
+            {{ isScopedToOwnOrganizer ? 'Net à vous reverser' : 'Net organisateurs' }} :
+            {{ formatPrice(totals.netRevenue) }}
           </p>
           <!--
             Le rappel du mois précédent seulement s'il y a eu des ventes. Sans
@@ -359,7 +371,10 @@ const goToCheckIn = event => router.push(`/events/${event.id}?tab=check-in`)
       cols="12"
       md="4"
     >
-      <TePopularEvents :events="overview?.topEvents ?? []" />
+      <TePopularEvents
+        :events="overview?.topEvents ?? []"
+        :show-organizer="canChooseOrganizer"
+      />
     </VCol>
 
     <!-- ─── Encaissements ─────────────────────────────────────────────────── -->
