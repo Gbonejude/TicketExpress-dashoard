@@ -571,7 +571,7 @@ const confirmDelete = async () => {
                   item-title="fullName"
                   item-value="id"
                   label="Responsable"
-                  :rules="[requiredValidator]"
+                  :rules="[requiredField('Responsable')]"
                   :error-messages="formErrors.user_id"
                 />
               </VCol>
@@ -580,7 +580,7 @@ const confirmDelete = async () => {
                 <VTextField
                   v-model="form.company_name"
                   label="Nom de l'entreprise"
-                  :rules="[requiredValidator, v => (v ?? '').length <= 255 || 'Le nom ne doit pas dépasser 255 caractères']"
+                  :rules="[requiredField('Nom de l\'entreprise'), v => (v ?? '').length <= 255 || 'Le nom ne doit pas dépasser 255 caractères']"
                   :error-messages="formErrors.company_name"
                 />
               </VCol>
@@ -589,7 +589,7 @@ const confirmDelete = async () => {
                 <VTextarea
                   v-model="form.description"
                   label="Description"
-                  :rules="[requiredValidator]"
+                  :rules="[requiredField('Description')]"
                   :error-messages="formErrors.description"
                 />
               </VCol>

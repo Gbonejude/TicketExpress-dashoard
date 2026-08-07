@@ -1,12 +1,33 @@
 import { isEmpty, isEmptyArray, isNullOrUndefined } from './helpers'
 
 // 👉 Required Validator
-export const requiredValidator = value => {
+//
+// Le message nomme le champ. « This field is required » répété sous six champs
+// empilés ne dit pas lequel manque : il faut relire le formulaire pour trouver
+// l'unique cadre rouge, et sur un formulaire plus haut que l'écran il est
+// souvent hors de vue.
+//
+// Sans article devant le libellé : le genre du champ est inconnu ici, et un
+// « Le » codé en dur donnerait « Le Description est obligatoire » sur la moitié
+// des formulaires. « Obligatoire » ne varie pas en genre, donc « Titre est
+// obligatoire » comme « Description est obligatoire » restent corrects.
+export const requiredValidator = (value, field) => {
+  const message = field
+    ? `${field} est obligatoire.`
+    : 'Ce champ est obligatoire.'
+
   if (isNullOrUndefined(value) || isEmptyArray(value) || value === false)
-    return 'This field is required'
-  
-  return !!String(value).trim().length || 'This field is required'
+    return message
+
+  return !!String(value).trim().length || message
 }
+
+// 👉 Required Validator, pré-rempli avec le nom du champ.
+//
+// Forme à utiliser dans une liste de règles : `:rules="[requiredField('Nom')]"`.
+// Elle évite d'écrire une lambda à chaque champ, là où Vuetify n'appelle une
+// règle qu'avec la valeur et ne peut donc pas transmettre le libellé lui-même.
+export const requiredField = field => value => requiredValidator(value, field)
 
 // 👉 Email Validator
 export const emailValidator = value => {

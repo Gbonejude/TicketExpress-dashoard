@@ -94,7 +94,7 @@ const onSubmit = async () => {
 
         <VCardText>
           <h4 class="text-h4 mb-1">
-            Mot de passe oublié ? 🔒
+            Mot de passe oublié ? 
           </h4>
           <p class="mb-0">
             Indiquez votre adresse : nous vous envoyons un lien pour en choisir un nouveau.
@@ -128,7 +128,7 @@ const onSubmit = async () => {
                   label="Email"
                   type="email"
                   placeholder="vous@exemple.tg"
-                  :rules="[requiredValidator, emailValidator]"
+                  :rules="[requiredField('Email'), emailValidator]"
                   :error-messages="errors.email"
                 />
               </VCol>

@@ -434,7 +434,7 @@ const confirmDelete = async () => {
                 <VTextField
                   v-model="form.first_name"
                   label="Prénom"
-                  :rules="[requiredValidator, v => (v ?? '').length <= 255 || 'Le prénom ne doit pas dépasser 255 caractères']"
+                  :rules="[requiredField('Prénom'), v => (v ?? '').length <= 255 || 'Le prénom ne doit pas dépasser 255 caractères']"
                   :error-messages="formErrors.first_name"
                 />
               </VCol>
@@ -446,7 +446,7 @@ const confirmDelete = async () => {
                 <VTextField
                   v-model="form.last_name"
                   label="Nom"
-                  :rules="[requiredValidator, v => (v ?? '').length <= 255 || 'Le nom ne doit pas dépasser 255 caractères']"
+                  :rules="[requiredField('Nom'), v => (v ?? '').length <= 255 || 'Le nom ne doit pas dépasser 255 caractères']"
                   :error-messages="formErrors.last_name"
                 />
               </VCol>
@@ -459,7 +459,7 @@ const confirmDelete = async () => {
                   v-model="form.email"
                   label="Email"
                   type="email"
-                  :rules="[requiredValidator, emailValidator]"
+                  :rules="[requiredField('Email'), emailValidator]"
                   :error-messages="formErrors.email"
                 />
               </VCol>
@@ -472,7 +472,7 @@ const confirmDelete = async () => {
                   v-model="form.phone"
                   label="Téléphone"
                   :rules="[
-                    requiredValidator,
+                    requiredField('Téléphone'),
                     v => (v ?? '').length >= 8 || 'Le téléphone doit contenir au moins 8 caractères',
                     v => (v ?? '').length <= 12 || 'Le téléphone ne doit pas dépasser 12 caractères',
                     v => /^([0-9\s\-+()]*)$/.test(v ?? '') || 'Format de téléphone invalide',
@@ -491,7 +491,7 @@ const confirmDelete = async () => {
                   item-title="title"
                   item-value="value"
                   label="Rôle"
-                  :rules="[requiredValidator]"
+                  :rules="[requiredField('Rôle')]"
                   :error-messages="formErrors.role"
                 />
               </VCol>
@@ -506,7 +506,7 @@ const confirmDelete = async () => {
                   item-title="title"
                   item-value="value"
                   label="Genre"
-                  :rules="[requiredValidator]"
+                  :rules="[requiredField('Genre')]"
                   :error-messages="formErrors.gender"
                 />
               </VCol>
