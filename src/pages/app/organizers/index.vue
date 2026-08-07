@@ -63,19 +63,88 @@ const statusOptions = [
   { title: 'Rejeté', value: 'rejected' },
 ]
 
+/*
+ * Les trois états d'un dossier deviennent trois onglets, comme « Billets vendus
+ * / Téléchargements » sur l'écran des billets.
+ *
+ * C'était une liste déroulante « Statut » parmi les filtres : une demande à
+ * trancher y était une option à aller chercher, au même rang qu'un tri. Les
+ * onglets annoncent d'emblée qu'il y a trois piles et laissent passer de l'une à
+ * l'autre d'un clic. Un seul tableau derrière : c'est le paramètre `status` de
+ * l'API qui change, pas la colonne affichée.
+ */
+const STATUS_TABS = [
+  { value: 'all', title: 'Tous', icon: 'tabler-users-group' },
+  { value: 'pending', title: 'Nouvelles demandes', icon: 'tabler-clock' },
+  { value: 'approved', title: 'Approuvées', icon: 'tabler-circle-check' },
+  { value: 'rejected', title: 'Rejetées', icon: 'tabler-circle-x' },
+]
+
+const statusTab = ref('all')
+
+// Filtre de la liste, distinct du champ `form.status` du formulaire : celui-ci
+// choisit le statut d'un dossier, celui-là choisit ce qu'on regarde.
+const statusFilter = computed(() => (statusTab.value === 'all' ? null : statusTab.value))
+
+const emptyText = computed(() => ({
+  pending: 'Aucune demande en attente',
+  approved: 'Aucun organisateur approuvé',
+  rejected: 'Aucune demande rejetée',
+})[statusTab.value] ?? 'Aucun organisateur')
+
 const apiUrl = computed(() => {
   const params = new URLSearchParams({ page: String(currentPage.value) })
   if (search.value) params.set('search', search.value)
+  if (statusFilter.value) params.set('status', statusFilter.value)
 
   return `/organizers?${params.toString()}`
 })
 
-watch(search, () => { currentPage.value = 1 })
+watch([search, statusFilter], () => { currentPage.value = 1 })
 
 const { data: organizersData, isFetching, execute: fetchOrganizers } = useApi(apiUrl)
 
+// Le nombre de dossiers en attente, indépendamment du filtre affiché : une
+// demande à traiter doit se voir même en regardant les dossiers approuvés.
+// `per_page=1` parce que seul le total nous intéresse.
+const { data: pendingData, execute: fetchPendingCount } = useApi('/organizers?status=pending&per_page=1')
+
+const pendingCount = computed(() => pendingData.value?.meta?.total ?? 0)
+
+/*
+ * À l'arrivée, on ouvre « Nouvelles demandes » s'il y en a.
+ *
+ * C'est ce que l'administration vient faire ici : trancher. Le compteur ne se
+ * connaît qu'après la première réponse, d'où la surveillance plutôt qu'une
+ * valeur initiale.
+ *
+ * Une seule fois, et jamais si l'onglet a déjà été choisi : les listes se
+ * rafraîchissent en temps réel, et sans ce garde une demande arrivant pendant
+ * qu'on consulte les dossiers rejetés ramènerait l'écran sous les pieds.
+ */
+const hasPickedTab = ref(false)
+let hasAutoOpenedPending = false
+
+watch(pendingCount, count => {
+  if (hasAutoOpenedPending || hasPickedTab.value || count === 0) return
+  hasAutoOpenedPending = true
+  statusTab.value = 'pending'
+})
+
+/**
+ * Reprend la liste **et** le compteur.
+ *
+ * Les deux vont ensemble : approuver un dossier le retire des demandes en
+ * attente, et laisser le compteur en arrière ferait annoncer une décision déjà
+ * prise.
+ */
+const refreshList = () => {
+  fetchOrganizers()
+  fetchPendingCount()
+}
+
 // Live refresh when an organizer registers / is updated elsewhere.
-useRealtimeRefresh('organizers', () => fetchOrganizers())
+useRealtimeRefresh('organizers', () => refreshList())
 
 const organizers = computed(() => organizersData.value?.data ?? [])
 const totalOrganizers = computed(() => organizersData.value?.meta?.total ?? 0)
@@ -204,7 +273,7 @@ const saveOrganizer = async () => {
       await useApi('/organizers').post(form).json()
     }
     isFormDialogOpen.value = false
-    fetchOrganizers()
+    refreshList()
   } catch (error) {
     if (error?.data?.errors) formErrors.value = error.data.errors
     else if (error?._data?.errors) formErrors.value = error._data.errors
@@ -218,7 +287,7 @@ const approveOrganizer = async organizer => {
   try {
     await $api(`/organizers/${organizer.id}/approve`, { method: 'POST' })
     notify(`${organizer.companyName} a été approuvé.`)
-    fetchOrganizers()
+    refreshList()
   } catch (err) {
     notify(err?.data?.message ?? "Impossible d'approuver l'organisateur.", 'error')
   } finally {
@@ -241,7 +310,7 @@ const confirmReject = async () => {
     })
     isRejectDialogOpen.value = false
     notify(`${rejectingOrganizer.value.companyName} a été rejeté.`, 'warning')
-    fetchOrganizers()
+    refreshList()
   } catch (err) {
     notify(err?.data?.message ?? "Impossible de rejeter l'organisateur.", 'error')
   } finally {
@@ -260,7 +329,7 @@ const toggleActive = async organizer => {
         : `${organizer.companyName} a été réactivé.`,
       organizer.isActive ? 'warning' : 'success',
     )
-    fetchOrganizers()
+    refreshList()
   } catch (err) {
     notify(err?.data?.message ?? "Impossible de changer l'état de l'organisateur.", 'error')
   } finally {
@@ -274,7 +343,7 @@ const confirmDelete = async () => {
     await useApi(`/organizers/${deletingOrganizer.value.id}`).delete().json()
     isDeleteDialogOpen.value = false
     notify('Organisateur supprimé.')
-    fetchOrganizers()
+    refreshList()
   } catch (err) {
     notify(err?.data?.message ?? "Impossible de supprimer l'organisateur.", 'error')
   } finally {
@@ -298,17 +367,54 @@ const confirmDelete = async () => {
         </VBtn>
       </VCardTitle>
 
+      <!--
+        Le compteur reste collé à l'onglet « Nouvelles demandes » : c'est là
+        qu'on va cliquer, et il se voit depuis les trois autres piles — une
+        demande à trancher ne dépend pas de ce qu'on est en train de regarder.
+      -->
+      <VTabs
+        v-model="statusTab"
+        class="px-2"
+        @update:model-value="hasPickedTab = true"
+      >
+        <VTab
+          v-for="tab in STATUS_TABS"
+          :key="tab.value"
+          :value="tab.value"
+        >
+          <VIcon
+            start
+            :icon="tab.icon"
+          />
+          {{ tab.title }}
+          <VChip
+            v-if="tab.value === 'pending' && pendingCount > 0"
+            color="warning"
+            size="x-small"
+            class="ms-2"
+          >
+            {{ pendingCount }}
+          </VChip>
+        </VTab>
+      </VTabs>
+
       <VDivider />
 
       <VCardText>
-        <VTextField
-          v-model="search"
-          placeholder="Rechercher par nom d'entreprise..."
-          prepend-inner-icon="tabler-search"
-          density="compact"
-          class="mb-4"
-          style="max-width: 360px"
-        />
+        <VRow class="mb-2">
+          <VCol
+            cols="12"
+            md="6"
+          >
+            <VTextField
+              v-model="search"
+              placeholder="Rechercher par nom d'entreprise..."
+              prepend-inner-icon="tabler-search"
+              density="compact"
+              clearable
+            />
+          </VCol>
+        </VRow>
       </VCardText>
 
       <VDataTableServer
@@ -318,7 +424,7 @@ const confirmDelete = async () => {
         :items-per-page="15"
         :page="currentPage"
         :loading="isFetching"
-        :no-data-text="'Aucun organisateur'"
+        :no-data-text="emptyText"
         class="text-no-wrap"
         @update:options="onTableOptions"
       >
@@ -392,6 +498,19 @@ const confirmDelete = async () => {
             >
               Désactivé
             </VChip>
+          </div>
+
+          <!--
+            Le motif du refus se lit là où on vient le chercher. Il n'était
+            visible que dans le dialogue de rejet, c'est-à-dire au moment de le
+            rédiger, jamais après.
+          -->
+          <div
+            v-if="item.status === 'rejected' && item.rejectionReason"
+            class="text-caption text-medium-emphasis mt-1"
+            style="max-width: 260px; white-space: normal;"
+          >
+            {{ item.rejectionReason }}
           </div>
         </template>
 

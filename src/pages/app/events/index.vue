@@ -1,5 +1,6 @@
 <script setup>
 import { notify, notifyApiError } from '@/utils/toast'
+import { useCurrentOrganizer } from '@/composables/useCurrentOrganizer'
 
 /*
  * Les clés du formulaire recopient volontairement celles de l'API, en
@@ -221,18 +222,12 @@ watch(() => form.title, val => {
  * « l'organisateur » à la troisième personne le ferait chercher qui c'est, et
  * lui faire choisir dans une liste ce qu'il est déjà n'a pas de sens.
  */
-const currentUser = useCookie('userData')
-const isOrganizerUser = computed(() => currentUser.value?.role === 'organizer-manager')
-const currentOrganizer = computed(() => currentUser.value?.organizer ?? null)
-
-/**
- * On ne masque le sélecteur que si l'on sait par quoi le remplacer.
- *
- * `organizer` n'a été ajouté à la session qu'après coup : les comptes déjà
- * connectés ont un cookie qui ne le porte pas. Plutôt que de casser la création
- * pour eux jusqu'à leur prochaine reconnexion, on leur laisse la liste.
- */
-const hideOrganizerSelect = computed(() => isOrganizerUser.value && !!currentOrganizer.value?.id)
+const {
+  isOrganizerUser,
+  organizer: currentOrganizer,
+  canChooseOrganizer,
+  isScopedToOwnOrganizer: hideOrganizerSelect,
+} = useCurrentOrganizer()
 
 // ─── Form lifecycle ────────────────────────────────────────────────────────
 const resetForm = () => {
@@ -549,7 +544,14 @@ const confirmDelete = async () => {
               clearable
             />
           </VCol>
+          <!--
+            Filtrer par organisateur n'a de sens que pour qui en administre
+            plusieurs. La liste restait offerte à l'organisateur connecté, qui
+            pouvait y désigner un confrère : l'API le ramenait à ses propres
+            événements, et le filtre passait pour cassé.
+          -->
           <VCol
+            v-if="canChooseOrganizer"
             cols="12"
             md="4"
           >

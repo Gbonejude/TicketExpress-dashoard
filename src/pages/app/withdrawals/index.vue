@@ -1,6 +1,7 @@
 <script setup>
 import { notify, notifyApiError } from '@/utils/toast'
 import { formatDateFr } from '@/utils/dateFormat'
+import { useCurrentOrganizer } from '@/composables/useCurrentOrganizer'
 
 definePage({
   meta: {
@@ -24,6 +25,20 @@ import { $api } from '@/utils/api'
  *   domaine : un retrait payé n'offre plus rien, et « payé » n'apparaît qu'après
  *   approbation.
  */
+/**
+ * Un organisateur demande un retrait pour lui-même.
+ *
+ * Le formulaire lui faisait choisir un organisateur dans la liste entière ; s'il
+ * en désignait un autre, l'API répondait 403 — « vous ne pouvez demander un
+ * retrait que pour votre propre compte ». Le champ disparaît et se remplit tout
+ * seul : c'est la seule valeur que le circuit accepte de lui.
+ */
+const {
+  organizerId: ownOrganizerId,
+  canChooseOrganizer,
+  isScopedToOwnOrganizer,
+} = useCurrentOrganizer()
+
 const currentPage = ref(1)
 const search = ref('')
 const statusFilter = ref(null)
@@ -59,8 +74,10 @@ const processForm = reactive({
 /** La référence n'est demandée — et exigée — que pour clore un retrait. */
 const isMarkingPaid = computed(() => processForm.status === 'paid')
 
-const headers = [
-  { title: 'Organisateur', key: 'organizer' },
+const headers = computed(() => [
+  // Le nom de l'organisateur n'a de sens que pour qui en voit plusieurs : sur
+  // son propre écran, c'est le sien répété à chaque ligne.
+  ...(canChooseOrganizer.value ? [{ title: 'Organisateur', key: 'organizer' }] : []),
   { title: 'Téléphone', key: 'requesterPhone' },
   { title: 'Montant', key: 'amount' },
   { title: 'Méthode', key: 'paymentMethod' },
@@ -68,7 +85,7 @@ const headers = [
   { title: 'Demandé le', key: 'createdAt' },
   { title: 'Traité', key: 'processed', sortable: false },
   { title: 'Actions', key: 'actions', sortable: false },
-]
+])
 
 const statusOptions = [
   { title: 'En attente', value: 'pending' },
@@ -131,8 +148,11 @@ const { data: organizersData, execute: fetchOrganizers } = useApi('/organizers?p
 
 const organizers = computed(() => organizersData.value?.data ?? [])
 
+// `Math.round` comme sur le tableau de bord et les rapports : la commission est
+// un pourcentage, elle produit des demi-francs qu'aucune caisse ne rend. La
+// validation, elle, continue de travailler sur le montant exact.
 const formatPrice = value =>
-  `${new Intl.NumberFormat('fr-FR').format(Number(value ?? 0))} FCFA`
+  `${new Intl.NumberFormat('fr-FR').format(Math.round(Number(value ?? 0)))} FCFA`
 
 const statusColor = status => ({
   pending: 'warning',
@@ -172,23 +192,48 @@ watch(() => form.organizerId, id => loadBalance(id))
 
 const available = computed(() => Number(balance.value?.availableBalance ?? 0))
 
+/**
+ * Le solde de l'organisateur connecté, chargé avec la page.
+ *
+ * `loadBalance` ne partait qu'à l'ouverture du formulaire : le montant
+ * disponible ne se lisait donc qu'après avoir décidé d'en demander un, alors
+ * que c'est précisément le chiffre qu'on vient voir ici.
+ *
+ * Il se recharge après chaque mouvement — déposer une demande fait passer son
+ * montant « en attente », et le solde baisse d'autant.
+ */
+const refreshOwnBalance = () => {
+  if (isScopedToOwnOrganizer.value) void loadBalance(ownOrganizerId.value)
+}
+
+refreshOwnBalance()
+
 const exceedsBalance = computed(() =>
   balance.value !== null && Number(form.amount ?? 0) > available.value)
 
 /* ─── Créer ─────────────────────────────────────────────────────────────────── */
 const resetForm = () => {
-  form.organizerId = ''
+  const organizerId = isScopedToOwnOrganizer.value ? ownOrganizerId.value : ''
+
+  // Le solde n'est oublié que si l'organisateur change. Pour un organisateur le
+  // champ revient toujours au sien : le `watch` ne se redéclencherait pas, et le
+  // vider ici laisserait la carte du solde vide à la deuxième ouverture.
+  if (organizerId !== form.organizerId) balance.value = null
+
+  form.organizerId = organizerId
   form.requesterPhone = ''
   form.amount = null
   form.paymentMethod = ''
   formErrors.value = {}
-  balance.value = null
   refForm.value?.resetValidation()
 }
 
 const openCreateDialog = () => {
   resetForm()
-  fetchOrganizers()
+
+  // Inutile de charger la liste pour qui n'a pas le choix : le solde, lui, part
+  // tout seul par le `watch` sur `form.organizerId`.
+  if (!isScopedToOwnOrganizer.value) fetchOrganizers()
   isFormDialogOpen.value = true
 }
 
@@ -211,6 +256,7 @@ const saveWithdrawal = async () => {
     isFormDialogOpen.value = false
     notify('Demande de retrait créée.')
     fetchWithdrawals()
+    refreshOwnBalance()
   } catch (error) {
     const data = error?.data ?? error?._data
     if (data?.errors) formErrors.value = data.errors
@@ -250,6 +296,7 @@ const confirmProcess = async () => {
     isProcessDialogOpen.value = false
     notify('Retrait traité.')
     fetchWithdrawals()
+    refreshOwnBalance()
   } catch (error) {
     notifyApiError(error, 'Impossible de traiter la demande.')
   } finally {
@@ -270,6 +317,7 @@ const confirmDelete = async () => {
     isDeleteDialogOpen.value = false
     notify('Demande supprimée.')
     fetchWithdrawals()
+    refreshOwnBalance()
   } catch (error) {
     notifyApiError(error, 'Impossible de supprimer la demande.')
   } finally {
@@ -280,6 +328,47 @@ const confirmDelete = async () => {
 
 <template>
   <div>
+    <!--
+      ─── Solde disponible ───────────────────────────────────────────────────
+
+      En tête, et à part des totaux par statut : ceux-là disent ce qui a déjà été
+      demandé, celui-ci ce qu'il reste à demander. C'est le chiffre pour lequel
+      on ouvre cet écran, et il ne se lisait que dans le formulaire — donc après
+      avoir décidé d'un montant.
+    -->
+    <VCard
+      v-if="isScopedToOwnOrganizer"
+      class="mb-6"
+    >
+      <VCardText class="d-flex align-center gap-4">
+        <VAvatar
+          color="primary"
+          variant="tonal"
+          rounded
+          size="42"
+        >
+          <VIcon icon="tabler-wallet" />
+        </VAvatar>
+
+        <div>
+          <div class="text-body-2 text-medium-emphasis">
+            Solde disponible
+          </div>
+          <div class="text-h5">
+            {{ balance ? formatPrice(available) : (isBalanceLoading ? '…' : '—') }}
+          </div>
+          <div
+            v-if="balance"
+            class="text-caption text-medium-emphasis"
+          >
+            Revenu net {{ formatPrice(balance.netRevenue) }} ·
+            déjà retiré {{ formatPrice(balance.totalWithdrawn) }} ·
+            en attente {{ formatPrice(balance.pendingWithdrawn) }}
+          </div>
+        </div>
+      </VCardText>
+    </VCard>
+
     <!-- ─── Totaux par statut ────────────────────────────────────────────────── -->
     <VRow class="mb-2">
       <VCol
@@ -317,13 +406,19 @@ const confirmDelete = async () => {
 
     <VCard>
       <VCardTitle class="d-flex align-center justify-space-between pa-4">
-        <span class="text-h6">Gestion des Retraits</span>
+        <!--
+          « Gestion des retraits » est le titre de qui les traite ; celui qui les
+          demande est sur son propre relevé.
+        -->
+        <span class="text-h6">
+          {{ canChooseOrganizer ? 'Gestion des Retraits' : 'Mes retraits' }}
+        </span>
         <VBtn
           color="primary"
           prepend-icon="tabler-plus"
           @click="openCreateDialog"
         >
-          Ajouter une demande
+          {{ canChooseOrganizer ? 'Ajouter une demande' : 'Demander un retrait' }}
         </VBtn>
       </VCardTitle>
 
@@ -526,7 +621,10 @@ const confirmDelete = async () => {
         <VCardText class="pt-4">
           <VForm ref="refForm">
             <VRow>
-              <VCol cols="12">
+              <VCol
+                v-if="!isScopedToOwnOrganizer"
+                cols="12"
+              >
                 <VSelect
                   v-model="form.organizerId"
                   :items="organizers"
