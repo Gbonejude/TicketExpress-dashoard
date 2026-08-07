@@ -43,12 +43,23 @@ const codeInput = ref()
 const history = ref([])
 const isHistoryLoading = ref(false)
 
+/**
+ * L'état du portique, renvoyé avec l'historique : ouvert, et sinon pourquoi.
+ *
+ * Affiché avant tout scan. Un agent qui arrive trois heures trop tôt doit le
+ * lire sur l'écran, pas le découvrir en refoulant son premier porteur.
+ */
+const window_ = ref(null)
+
+const isGateClosed = computed(() => window_.value?.isOpen === false)
+
 // Les clés reprennent les valeurs de `result` renvoyées par l'API, d'où le
 // snake_case.
 const RESULT_STYLES = {
   'ok': { color: 'success', icon: 'tabler-circle-check', title: 'Entrée autorisée' },
   'already_used': { color: 'warning', icon: 'tabler-alert-triangle', title: 'Billet déjà utilisé' },
   'wrong_event': { color: 'warning', icon: 'tabler-calendar-x', title: 'Autre événement' },
+  'outside_window': { color: 'warning', icon: 'tabler-clock-x', title: 'Portique fermé' },
   'not_valid': { color: 'error', icon: 'tabler-ban', title: 'Billet non valide' },
   'not_found': { color: 'error', icon: 'tabler-search-off', title: 'Billet introuvable' },
 }
@@ -67,6 +78,7 @@ const loadHistory = async () => {
     const res = await $api(`/events/${props.eventId}/check-ins?limit=15`)
 
     history.value = res?.data?.checkIns ?? []
+    window_.value = res?.data?.window ?? null
   } catch {
     history.value = []
   } finally {
@@ -284,8 +296,24 @@ onBeforeUnmount(stopCamera)
             </div>
 
             <!--
+              Portique fermé : dit avant le premier scan, pas après le premier
+              refus. Le champ reste actif — c'est le serveur qui tranche, et un
+              agent doit pouvoir vérifier un code même hors des heures.
+            -->
+            <VAlert
+              v-if="isGateClosed"
+              type="warning"
+              variant="tonal"
+              density="compact"
+              class="mb-4"
+              icon="tabler-clock-x"
+            >
+              {{ window_.reason }}
+            </VAlert>
+
+            <!--
               Caméra : montée seulement quand elle tourne, pour que le flux
-              soit libéré dès qu'on l'arrête. 
+              soit libéré dès qu'on l'arrête.
             -->
             <div
               v-if="isCameraOn"

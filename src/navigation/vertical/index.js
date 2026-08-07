@@ -121,6 +121,17 @@ export default [
         action: 'read',
         subject: 'administrators',
       },
+
+      // Visible du seul organisateur : les heures d'ouverture du portique lui
+      // appartiennent, et le serveur n'accorde `organizer-profile` qu'aux
+      // comptes qui ont une fiche d'organisateur.
+      {
+        title: 'Contrôle d\'accès',
+        icon: { icon: 'tabler-clock-check' },
+        to: 'checkin-settings',
+        action: 'read',
+        subject: 'organizer-profile',
+      },
       {
         title: 'Retraits',
         icon: { icon: 'tabler-cash' },

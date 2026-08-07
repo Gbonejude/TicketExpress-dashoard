@@ -43,6 +43,7 @@ const orderStatusColor = status => ({
 const ticketStatusColor = status => ({
   valid: 'success',
   used: 'info',
+  expired: 'warning',
   cancelled: 'error',
   refunded: 'secondary',
 })[status] ?? 'secondary'
