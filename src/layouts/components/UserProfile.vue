@@ -1,12 +1,25 @@
 <script setup>
 import { PerfectScrollbar } from 'vue3-perfect-scrollbar'
-import { $api } from '@/utils/api'
+import { $api, toMediaUrl } from '@/utils/api'
 
 const router = useRouter()
 const ability = useAbility()
 
 const userData = useCookie('userData')
 const avatarRef = ref(null)
+
+/**
+ * La photo du compte, quand il en a une.
+ *
+ * `thumbnail` d'abord : c'est la vignette 80×80 de la bibliothèque de médias, et
+ * la barre du haut n'a que faire de l'original. Repli sur l'icône générique
+ * plutôt que sur une image cassée.
+ */
+const photoUrl = computed(() => {
+  const source = userData.value?.thumbnail || userData.value?.image
+
+  return source ? toMediaUrl(source) : null
+})
 
 const isLogoutDialogVisible = ref(false)
 const isLoggingOut = ref(false)
@@ -30,25 +43,16 @@ const logout = async () => {
   await router.push({ name: 'template-login' })
 }
 
+// Plus de « Paramètres » : l'entrée menait à un onglet qui annonçait une
+// fonction à venir. « Mon profil » est désormais l'écran où l'on modifie ses
+// informations, et le menu ne promet plus que ce qui existe.
 const userProfileList = [
   { type: 'divider' },
   {
     type: 'navItem',
     icon: 'tabler-user',
     title: 'Mon profil',
-    to: {
-      name: 'account',
-      query: { tab: 'profile' },
-    },
-  },
-  {
-    type: 'navItem',
-    icon: 'tabler-settings',
-    title: 'Paramètres',
-    to: {
-      name: 'account',
-      query: { tab: 'settings' },
-    },
+    to: { name: 'account' },
   },
 ]
 </script>
@@ -62,7 +66,15 @@ const userProfileList = [
       color="primary"
       variant="tonal"
     >
-      <VIcon icon="tabler-user" />
+      <VImg
+        v-if="photoUrl"
+        :src="photoUrl"
+        cover
+      />
+      <VIcon
+        v-else
+        icon="tabler-user"
+      />
     </VAvatar>
 
     <VMenu
@@ -78,7 +90,15 @@ const userProfileList = [
               color="primary"
               variant="tonal"
             >
-              <VIcon icon="tabler-user" />
+              <VImg
+                v-if="photoUrl"
+                :src="photoUrl"
+                cover
+              />
+              <VIcon
+                v-else
+                icon="tabler-user"
+              />
             </VAvatar>
             <div>
               <h6 class="text-h6 font-weight-medium">
