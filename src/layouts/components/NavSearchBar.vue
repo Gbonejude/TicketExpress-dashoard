@@ -1,6 +1,7 @@
 <script setup>
 import Shepherd from 'shepherd.js'
 import { useConfigStore } from '@core/stores/config'
+import navItems from '@/navigation/vertical'
 
 defineOptions({
   inheritAttrs: false,
@@ -15,27 +16,37 @@ const isLoading = ref(false)
 const searchQuery = ref('')
 const searchResult = ref([])
 
-// Every back-office page, tagged with the ability subject that guards it.
+/**
+ * Les pages joignables, tirées du menu lui-même.
+ *
+ * C'était une liste recopiée à la main, et elle avait dérivé : « Événements en
+ * cours », « Participants », « Rapports & statistiques », « Paramètres » et
+ * « Contrôle d'accès » manquaient à l'appel, introuvables par la recherche alors
+ * qu'ils sont dans la barre latérale. Une seule source, donc : le prochain écran
+ * ajouté au menu sera trouvable sans que personne ait à y penser.
+ *
+ * Les entrées de premier niveau qui n'ont pas de `to` sont des groupes
+ * (« Catalogue », « Administration ») : on garde leurs enfants, pas elles.
+ */
 const appPages = [
-  { title: 'Tableau de bord', icon: 'tabler-layout-dashboard', subject: 'dashboard', url: { name: 'dashboard' } },
-  { title: 'Événements', icon: 'tabler-calendar-event', subject: 'events', url: { name: 'events' } },
-  { title: 'Commandes', icon: 'tabler-shopping-cart', subject: 'bookings', url: { name: 'orders' } },
-  { title: 'Paiements', icon: 'tabler-credit-card', subject: 'payments', url: { name: 'payments' } },
-  { title: 'Promotions', icon: 'tabler-rosette-discount', subject: 'promotions', url: { name: 'promotions' } },
-  { title: 'Billets vendus', icon: 'tabler-ticket', subject: 'tickets', url: { name: 'tickets' } },
-  { title: 'Coupons', icon: 'tabler-discount', subject: 'coupons', url: { name: 'coupons' } },
-  { title: 'Catégories', icon: 'tabler-category', subject: 'categories', url: { name: 'categories' } },
-  { title: 'Lieux', icon: 'tabler-map-pin', subject: 'venues', url: { name: 'venues' } },
-  { title: 'Organisateurs', icon: 'tabler-building-store', subject: 'organizers', url: { name: 'organizers' } },
-  { title: 'Utilisateurs', icon: 'tabler-users', subject: 'users', url: { name: 'users' } },
-  { title: 'Rôles & permissions', icon: 'tabler-lock-cog', subject: 'administrators', url: { name: 'roles' } },
-  { title: 'Retraits', icon: 'tabler-cash', subject: 'withdrawals', url: { name: 'withdrawals' } },
-  { title: 'Notifications', icon: 'tabler-bell', subject: 'notifications', url: { name: 'notifications' } },
-  { title: 'Mon compte', icon: 'tabler-user', subject: 'Auth', url: { name: 'account' } },
+  ...navItems
+    .flatMap(item => item.children ?? [item])
+    .filter(item => item.to)
+    .map(item => ({
+      title: item.title,
+      icon: item.icon?.icon ?? 'tabler-file',
+      action: item.action ?? 'read',
+      subject: item.subject,
+      url: { name: item.to },
+    })),
+
+  // Hors menu : « Mon compte » vit dans le menu de l'avatar, mais c'est une page
+  // comme une autre pour qui la cherche.
+  { title: 'Mon compte', icon: 'tabler-user', action: 'read', subject: 'Auth', url: { name: 'account' } },
 ]
 
 // Only the pages the current user is actually allowed to open.
-const allowedPages = computed(() => appPages.filter(p => ability.can('read', p.subject)))
+const allowedPages = computed(() => appPages.filter(p => ability.can(p.action, p.subject)))
 
 const suggestionGroups = computed(() => [
   {

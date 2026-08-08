@@ -126,6 +126,19 @@ const totalWithdrawals = computed(() => withdrawalsData.value?.meta?.total ?? 0)
 /** Totaux par statut, calculés par l'API sur l'ensemble filtré. */
 const stats = computed(() => withdrawalsData.value?.stats ?? {})
 
+/**
+ * Le libellé français est connu d'avance, et sert de repli.
+ *
+ * Les cartes retombaient sur la clé de l'API tant qu'elle n'avait pas répondu :
+ * l'écran s'ouvrait sur « pending », « paid », « rejected », qui se changeaient
+ * en français une seconde plus tard. Le titre d'une carte ne dépend pas des
+ * données qu'elle compte — seuls les chiffres les attendent.
+ *
+ * `statusOptions` reste la source : c'est déjà la liste du filtre juste
+ * au-dessus, et deux traductions du même statut finiraient par diverger.
+ */
+const STATUS_LABELS = Object.fromEntries(statusOptions.map(option => [option.value, option.title]))
+
 const statCards = computed(() => [
   { key: 'pending', icon: 'tabler-clock', color: 'warning' },
   { key: 'approved', icon: 'tabler-circle-check', color: 'info' },
@@ -133,7 +146,7 @@ const statCards = computed(() => [
   { key: 'rejected', icon: 'tabler-ban', color: 'error' },
 ].map(card => ({
   ...card,
-  label: stats.value[card.key]?.label ?? card.key,
+  label: stats.value[card.key]?.label ?? STATUS_LABELS[card.key] ?? card.key,
   count: stats.value[card.key]?.count ?? 0,
   total: stats.value[card.key]?.total ?? 0,
 })))
