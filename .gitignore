@@ -41,3 +41,8 @@ public/mockServiceWorker.js
 # Env files
 .env*
 !.env.example
+
+# Fichier temporaire que Vite dépose à la racine le temps de charger sa
+# configuration. Il traîne quand le serveur ne s'arrête pas proprement, et se
+# retrouvait dans `git status` comme s'il fallait le versionner.
+vite.config.js.timestamp-*
