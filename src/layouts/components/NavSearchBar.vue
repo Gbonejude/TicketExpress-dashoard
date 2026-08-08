@@ -31,7 +31,7 @@ const appPages = [
   { title: 'Rôles & permissions', icon: 'tabler-lock-cog', subject: 'administrators', url: { name: 'roles' } },
   { title: 'Retraits', icon: 'tabler-cash', subject: 'withdrawals', url: { name: 'withdrawals' } },
   { title: 'Notifications', icon: 'tabler-bell', subject: 'notifications', url: { name: 'notifications' } },
-  { title: 'Mon compte', icon: 'tabler-user', subject: 'Auth', url: { name: 'account', query: { tab: 'profile' } } },
+  { title: 'Mon compte', icon: 'tabler-user', subject: 'Auth', url: { name: 'account' } },
 ]
 
 // Only the pages the current user is actually allowed to open.
