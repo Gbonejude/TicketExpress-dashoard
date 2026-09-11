@@ -257,9 +257,33 @@ const resetForm = () => {
   formRef.value?.resetValidation?.()
 }
 
+// Même plafond que la règle `image|max:2048` du backend, mais vérifié ici pour
+// que l'utilisateur sache tout de suite pourquoi son affiche est refusée —
+// avant, un dépassement partait jusqu'à l'API et revenait en 422 muet, la
+// modification « ne passait pas » sans un mot d'explication.
+const MAX_BANNER_BYTES = 2 * 1024 * 1024
+
 const onBannerSelected = event => {
   const file = event.target.files[0]
+
+  // Réinitialise l'input pour pouvoir re-sélectionner le même fichier après
+  // une erreur (sinon `change` ne se redéclenche pas sur un choix identique).
+  event.target.value = ''
   if (!file) return
+
+  if (!file.type.startsWith('image/')) {
+    formErrors.value = { ...formErrors.value, banner: ['Le fichier doit être une image (JPG ou PNG).'] }
+
+    return
+  }
+
+  if (file.size > MAX_BANNER_BYTES) {
+    formErrors.value = { ...formErrors.value, banner: ['L’image ne doit pas dépasser 2 Mo.'] }
+
+    return
+  }
+
+  formErrors.value = { ...formErrors.value, banner: undefined }
   bannerFile.value = file
   bannerPreview.value = URL.createObjectURL(file)
 }
@@ -387,7 +411,14 @@ const buildPayload = () => ({
 const buildFormData = () => {
   const fd = new FormData()
 
-  meaningfulEntries().forEach(([key, val]) => { fd.append(key, String(val)) })
+  meaningfulEntries().forEach(([key, val]) => {
+    // Un booléen ne se transporte pas tel quel en multipart : `String(true)`
+    // donne « true », que la règle `boolean` de Laravel refuse — elle n'accepte
+    // que 1/0. Sans ce cas, toute édition AVEC image partait avec
+    // `refund_allowed=true` et échouait en 422. En JSON (sans image), la valeur
+    // reste un vrai booléen et le problème ne se posait pas.
+    fd.append(key, typeof val === 'boolean' ? (val ? '1' : '0') : String(val))
+  })
 
   // Une chaîne vide, faute de pouvoir transporter null en multipart. Le
   // middleware ConvertEmptyStringsToNull de Laravel la retraduit en null.
@@ -859,6 +890,14 @@ const confirmDelete = async () => {
                   </div>
                   <p class="text-body-2 text-medium-emphasis mb-0">
                     JPG ou PNG · Max 2 Mo
+                  </p>
+
+                  <!-- Erreur de bannière (taille/type côté client, ou 422 de l'API). -->
+                  <p
+                    v-if="formErrors.banner"
+                    class="text-error text-body-2 mb-0"
+                  >
+                    {{ Array.isArray(formErrors.banner) ? formErrors.banner[0] : formErrors.banner }}
                   </p>
                 </div>
 
