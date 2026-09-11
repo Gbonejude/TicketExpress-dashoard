@@ -22,6 +22,11 @@ const errors = ref({
   password: undefined,
 })
 
+// Erreur générale du formulaire (ex. « E-mail ou mot de passe incorrect. »),
+// affichée en haut plutôt que collée sous le champ e-mail : le message ne
+// désigne aucun champ en particulier, il désigne la tentative.
+const formError = ref('')
+
 const refVForm = ref()
 
 const credentials = ref({
@@ -31,6 +36,7 @@ const credentials = ref({
 
 const login = async () => {
   errors.value = { email: undefined, password: undefined }
+  formError.value = ''
 
   try {
     const res = await $api('/auth/admin/login', {
@@ -41,10 +47,13 @@ const login = async () => {
       },
       onResponseError({ response }) {
         const data = response._data
+
+        // Erreurs de validation par champ vs message général : « identifiants
+        // incorrects » n'est pas une erreur du champ e-mail, elle va en haut.
         if (data?.errors) {
           errors.value = data.errors
         } else if (data?.message) {
-          errors.value = { email: data.message }
+          formError.value = data.message
         }
       },
     })
@@ -120,6 +129,20 @@ const onSubmit = () => {
             @submit.prevent="onSubmit"
           >
             <VRow>
+              <!-- erreur générale (identifiants incorrects, etc.) -->
+              <VCol
+                v-if="formError"
+                cols="12"
+                class="pb-0 text-center"
+              >
+                <span
+                  class="text-error text-body-2"
+                  role="alert"
+                >
+                  {{ formError }}
+                </span>
+              </VCol>
+
               <!-- email -->
               <VCol cols="12">
                 <AppTextField
