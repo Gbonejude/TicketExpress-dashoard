@@ -1188,8 +1188,8 @@ const statsHeaders = [
                   v-model="ticketForm.price"
                   label="Prix (FCFA)"
                   type="number"
-                  min="0"
-                  :rules="[requiredField('Prix (FCFA)')]"
+                  min="1"
+                  :rules="[requiredField('Prix (FCFA)'), v => Number(v) > 0 || 'Le prix doit être supérieur à 0.']"
                   :error-messages="ticketErrors.price"
                 />
               </VCol>

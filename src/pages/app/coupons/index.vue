@@ -39,7 +39,8 @@ const form = reactive({
   max_usage: '',
   start_date: '',
   end_date: '',
-  event_ids: [],
+  // Un coupon vise exactement un événement : c'est lui qui borne ses dates.
+  event_id: null,
 })
 
 const headers = [
@@ -134,6 +135,11 @@ const nowForInput = computed(() =>
   new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 16))
 const endDateMin = computed(() => form.start_date || nowForInput.value)
 
+// L'événement visé borne la validité : ni la fin, ni le début du coupon ne
+// dépassent la fin de l'événement (le coupon peut, lui, commencer avant).
+const selectedEvent = computed(() => eventOptions.value.find(ev => ev.id === form.event_id) ?? null)
+const eventEndInput = computed(() => toDatetimeLocal(selectedEvent.value?.endDate) || undefined)
+
 // ─── Dialogs ──────────────────────────────────────────────────────────────────
 const resetForm = () => {
   form.code = ''
@@ -142,7 +148,7 @@ const resetForm = () => {
   form.max_usage = ''
   form.start_date = ''
   form.end_date = ''
-  form.event_ids = []
+  form.event_id = null
   Object.keys(fieldErrors).forEach(key => { fieldErrors[key] = undefined })
   editingCoupon.value = null
   formRef.value?.resetValidation()
@@ -170,9 +176,9 @@ const openEditDialog = async coupon => {
   try {
     const detail = await $api(`/coupons/${coupon.id}`)
 
-    form.event_ids = (detail?.data?.events ?? []).map(ev => ev.id)
+    form.event_id = (detail?.data?.events ?? [])[0]?.id ?? null
   } catch {
-    form.event_ids = []
+    form.event_id = null
   } finally {
     isLoadingAssociations.value = false
   }
@@ -197,7 +203,7 @@ const saveCoupon = async () => {
     max_usage: Number(form.max_usage),
     start_date: form.start_date,
     end_date: form.end_date,
-    event_ids: form.event_ids,
+    event_ids: form.event_id ? [form.event_id] : [],
   }
 
   try {
@@ -532,6 +538,20 @@ const confirmDelete = async () => {
         <VCardText class="pt-4">
           <VForm ref="formRef">
             <VRow>
+              <!-- L'événement d'abord : c'est lui qui borne les dates du coupon. -->
+              <VCol cols="12">
+                <VSelect
+                  v-model="form.event_id"
+                  label="Événement"
+                  :items="eventOptions"
+                  item-title="title"
+                  item-value="id"
+                  :loading="isLoadingAssociations"
+                  :rules="[requiredField('Événement')]"
+                  :error-messages="fieldErrors.event_ids"
+                  required
+                />
+              </VCol>
               <VCol cols="12">
                 <VTextField
                   v-model="form.code"
@@ -591,6 +611,7 @@ const confirmDelete = async () => {
                   type="datetime-local"
                   label="Date de début"
                   :min="nowForInput"
+                  :max="eventEndInput"
                   :rules="[requiredField('Date de début')]"
                   :error-messages="fieldErrors.start_date"
                   required
@@ -605,25 +626,10 @@ const confirmDelete = async () => {
                   type="datetime-local"
                   label="Date de fin"
                   :min="endDateMin"
+                  :max="eventEndInput"
                   :rules="[requiredField('Date de fin'), endAfterStartValidator]"
                   :error-messages="fieldErrors.end_date"
                   required
-                />
-              </VCol>
-              <VCol cols="12">
-                <VSelect
-                  v-model="form.event_ids"
-                  label="Événements associés (optionnel)"
-                  :items="eventOptions"
-                  item-title="title"
-                  item-value="id"
-                  multiple
-                  chips
-                  closable-chips
-                  :loading="isLoadingAssociations"
-                  :error-messages="fieldErrors.event_ids"
-                  hint="Laissez vide pour appliquer le coupon à tous les événements"
-                  persistent-hint
                 />
               </VCol>
             </VRow>
