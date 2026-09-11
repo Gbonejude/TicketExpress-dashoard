@@ -388,6 +388,16 @@ const gateTime = (dateField, hours, direction) => {
 const gateOpensAt = computed(() => gateTime('start_date', form.checkin_open_hours_before, -1))
 const gateClosesAt = computed(() => gateTime('end_date', form.checkin_close_hours_after, 1))
 
+// Bornes des champs datetime-local, au format local `YYYY-MM-DDTHH:mm` attendu
+// par l'input. On empêche de choisir une date passée pour le début, et une fin
+// antérieure au début — les mêmes garde-fous que côté API, mais dès la saisie.
+const toLocalInput = date =>
+  new Date(new Date(date).getTime() - new Date(date).getTimezoneOffset() * 60000)
+    .toISOString().slice(0, 16)
+
+const nowForInput = computed(() => toLocalInput(new Date()))
+const endDateMin = computed(() => form.start_date || nowForInput.value)
+
 // ─── Payload builders ──────────────────────────────────────────────────────
 const meaningfulEntries = () =>
   Object.entries(form).filter(([, v]) => v !== '' && v !== null && v !== undefined)
@@ -1034,6 +1044,7 @@ const confirmDelete = async () => {
                   v-model="form.start_date"
                   label="Date de début"
                   type="datetime-local"
+                  :min="nowForInput"
                   :rules="[requiredField('Date de début')]"
                   :error-messages="formErrors.start_date"
                 />
@@ -1046,6 +1057,7 @@ const confirmDelete = async () => {
                   v-model="form.end_date"
                   label="Date de fin"
                   type="datetime-local"
+                  :min="endDateMin"
                   :rules="[requiredField('Date de fin')]"
                   :error-messages="formErrors.end_date"
                 />

@@ -105,6 +105,13 @@ const occForm = reactive({
   notes: '',
 })
 
+// Une représentation vit dans la période de l'événement : on borne la saisie au
+// créneau [début, fin] de l'événement (et la fin ne précède pas le début
+// saisi). Mêmes garde-fous que l'API, mais dès la saisie.
+const eventStartInput = computed(() => toDatetimeLocal(event.value?.startDate))
+const eventEndInput = computed(() => toDatetimeLocal(event.value?.endDate))
+const occEndMin = computed(() => occForm.start_date || eventStartInput.value)
+
 const resetOccForm = () => {
   occForm.start_date = ''
   occForm.end_date = ''
@@ -231,6 +238,15 @@ const ticketForm = reactive({
   promotion_start_date: '',
   promotion_end_date: '',
 })
+
+// Bornes des dates du billet : la vente reste dans l'événement, la promotion
+// dans la vente (mêmes garde-fous que l'API, dès la saisie). `undefined` laisse
+// la borne libre quand la référence n'est pas encore saisie.
+const saleEndMin = computed(() => ticketForm.sale_start_date || undefined)
+const promoStartMin = computed(() => ticketForm.sale_start_date || undefined)
+const promoStartMax = computed(() => ticketForm.sale_end_date || eventEndInput.value || undefined)
+const promoEndMin = computed(() => ticketForm.promotion_start_date || ticketForm.sale_start_date || undefined)
+const promoEndMax = computed(() => ticketForm.sale_end_date || eventEndInput.value || undefined)
 
 // Occurrences the ticket type can be tied to (for multi-date events).
 const occurrenceOptions = computed(() => occurrences.value.map(o => ({
@@ -993,6 +1009,8 @@ const statsHeaders = [
                   v-model="occForm.start_date"
                   label="Date et heure de début"
                   type="datetime-local"
+                  :min="eventStartInput"
+                  :max="eventEndInput"
                   :rules="[requiredField('Date et heure de début')]"
                   :error-messages="occErrors.start_date"
                 />
@@ -1005,6 +1023,8 @@ const statsHeaders = [
                   v-model="occForm.end_date"
                   label="Date et heure de fin"
                   type="datetime-local"
+                  :min="occEndMin"
+                  :max="eventEndInput"
                   :rules="[requiredField('Date et heure de fin')]"
                   :error-messages="occErrors.end_date"
                 />
@@ -1195,6 +1215,7 @@ const statsHeaders = [
                   v-model="ticketForm.sale_start_date"
                   label="Début des ventes"
                   type="datetime-local"
+                  :max="eventEndInput || undefined"
                   :error-messages="ticketErrors.sale_start_date"
                 />
               </VCol>
@@ -1206,6 +1227,8 @@ const statsHeaders = [
                   v-model="ticketForm.sale_end_date"
                   label="Fin des ventes"
                   type="datetime-local"
+                  :min="saleEndMin"
+                  :max="eventEndInput || undefined"
                   :error-messages="ticketErrors.sale_end_date"
                 />
               </VCol>
@@ -1275,6 +1298,8 @@ const statsHeaders = [
                   v-model="ticketForm.promotion_start_date"
                   label="Début de la promotion"
                   type="datetime-local"
+                  :min="promoStartMin"
+                  :max="promoStartMax"
                   :error-messages="ticketErrors.promotion_start_date"
                 />
               </VCol>
@@ -1286,6 +1311,8 @@ const statsHeaders = [
                   v-model="ticketForm.promotion_end_date"
                   label="Fin de la promotion"
                   type="datetime-local"
+                  :min="promoEndMin"
+                  :max="promoEndMax"
                   :error-messages="ticketErrors.promotion_end_date"
                 />
               </VCol>
