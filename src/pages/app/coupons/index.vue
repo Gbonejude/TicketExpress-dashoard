@@ -128,6 +128,12 @@ const endAfterStartValidator = value => {
   return new Date(value) > new Date(form.start_date) || 'La date de fin doit être après la date de début.'
 }
 
+// Bornes des champs datetime-local : un coupon ne démarre pas dans le passé et
+// ne finit pas avant de commencer. Mêmes garde-fous que l'API, dès la saisie.
+const nowForInput = computed(() =>
+  new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 16))
+const endDateMin = computed(() => form.start_date || nowForInput.value)
+
 // ─── Dialogs ──────────────────────────────────────────────────────────────────
 const resetForm = () => {
   form.code = ''
@@ -584,6 +590,7 @@ const confirmDelete = async () => {
                   v-model="form.start_date"
                   type="datetime-local"
                   label="Date de début"
+                  :min="nowForInput"
                   :rules="[requiredField('Date de début')]"
                   :error-messages="fieldErrors.start_date"
                   required
@@ -597,6 +604,7 @@ const confirmDelete = async () => {
                   v-model="form.end_date"
                   type="datetime-local"
                   label="Date de fin"
+                  :min="endDateMin"
                   :rules="[requiredField('Date de fin'), endAfterStartValidator]"
                   :error-messages="fieldErrors.end_date"
                   required
