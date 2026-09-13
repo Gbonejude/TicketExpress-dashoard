@@ -204,8 +204,9 @@ const toggleReadUnread = (isSeen, Id) => {
           <VBtn
             block
             size="small"
+            to="/notifications"
           >
-            View All Notifications
+            Voir toutes les notifications
           </VBtn>
         </VCardText>
       </VCard>

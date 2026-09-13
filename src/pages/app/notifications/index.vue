@@ -72,16 +72,38 @@ const formatDate = value => {
   })
 }
 
-const markAsRead = async notification => {
-  markingReadId.value = notification.id
-  try {
-    await useApi(`/notifications/${notification.id}/markasread`).post().json()
-    notify('Notification marquée comme lue.')
-    fetchNotifications()
-  } catch (error) {
-    notifyApiError(error, 'Impossible de marquer la notification.')
-  } finally {
-    markingReadId.value = null
+const router = useRouter()
+
+const getTarget = item => {
+  const data = item.data ?? {}
+
+  if (data.order_id || data.orderId || data.order?.id)
+    return { type: 'order', id: data.order_id ?? data.orderId ?? data.order?.id }
+  if (data.order_number || data.orderNumber)
+    return { type: 'order_number', number: data.order_number ?? data.orderNumber }
+  if (data.withdrawal_id || data.withdrawalId || data.action === 'view_withdrawal')
+    return { type: 'withdrawal' }
+  if (data.url)
+    return { type: 'url', url: data.url.replace(/^\/organizer/, '') }
+
+  return null
+}
+
+const goToTarget = item => {
+  const target = getTarget(item)
+  if (!target) return
+
+  if (!item.read_at)
+    void markAsRead(item)
+
+  if (target.type === 'order') {
+    void router.push(`/orders/${target.id}`)
+  } else if (target.type === 'order_number') {
+    void router.push({ path: '/orders', query: { search: target.number } })
+  } else if (target.type === 'withdrawal') {
+    void router.push('/withdrawals')
+  } else if (target.type === 'url') {
+    void router.push(target.url)
   }
 }
 </script>
@@ -116,7 +138,22 @@ const markAsRead = async notification => {
       >
         <!-- Titre -->
         <template #item.title="{ item }">
-          <span class="font-weight-medium">{{ item.data?.title ?? '-' }}</span>
+          <div class="d-flex align-center gap-2">
+            <span
+              :class="getTarget(item) ? 'text-primary cursor-pointer font-weight-medium text-decoration-underline' : 'font-weight-medium'"
+              @click="getTarget(item) && goToTarget(item)"
+            >
+              {{ item.data?.title ?? '-' }}
+            </span>
+            <VIcon
+              v-if="getTarget(item)"
+              icon="tabler-arrow-up-right"
+              size="16"
+              color="primary"
+              class="cursor-pointer"
+              @click="goToTarget(item)"
+            />
+          </div>
         </template>
 
         <!-- Message -->
@@ -159,6 +196,25 @@ const markAsRead = async notification => {
         <!-- Actions -->
         <template #item.actions="{ item }">
           <VTooltip
+            v-if="getTarget(item)"
+            :text="getTarget(item)?.type === 'withdrawal' ? 'Voir le retrait' : 'Voir la commande'"
+            location="top"
+          >
+            <template #activator="{ props }">
+              <VBtn
+                v-bind="props"
+                icon
+                variant="text"
+                size="small"
+                color="primary"
+                @click="goToTarget(item)"
+              >
+                <VIcon icon="tabler-eye" />
+              </VBtn>
+            </template>
+          </VTooltip>
+
+          <VTooltip
             v-if="!item.read_at"
             text="Marquer comme lu"
             location="top"
@@ -178,12 +234,8 @@ const markAsRead = async notification => {
             </template>
           </VTooltip>
 
-          <!--
-            Modifier / Supprimer absents : le back-end renvoie 501 (non
-            implémenté) sur PUT et DELETE /notifications/{id}.
-          -->
           <span
-            v-if="item.read_at"
+            v-if="item.read_at && !getTarget(item)"
             class="text-medium-emphasis"
           >—</span>
         </template>

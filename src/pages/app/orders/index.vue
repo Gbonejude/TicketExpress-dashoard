@@ -12,9 +12,10 @@ definePage({
 import { $api } from '@/utils/api'
 
 const router = useRouter()
+const route = useRoute()
 
 const currentPage = ref(1)
-const search = ref('')
+const search = ref(route.query.search ? String(route.query.search) : '')
 const statusFilter = ref(null)
 const eventFilter = ref(null)
 
@@ -31,7 +32,7 @@ const statusOptions = [
 ]
 
 // Debounced search so we don't hit the API on every keystroke.
-const debouncedSearch = ref('')
+const debouncedSearch = ref(search.value)
 let searchTimer = null
 
 watch(search, value => {
@@ -39,6 +40,13 @@ watch(search, value => {
   searchTimer = setTimeout(() => {
     debouncedSearch.value = value
   }, 400)
+})
+
+watch(() => route.query.search, val => {
+  if (val !== undefined && val !== search.value) {
+    search.value = String(val)
+    debouncedSearch.value = String(val)
+  }
 })
 
 const isCancelDialogOpen = ref(false)

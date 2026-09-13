@@ -1,6 +1,8 @@
 <script setup>
 import { $api } from '@/utils/api'
 
+const router = useRouter()
+
 // Notifications are scoped to the current user by the backend
 // (`$request->user()->notifications()`), so an organizer only ever sees their
 // own notifications here.
@@ -35,6 +37,7 @@ const mapNotification = n => ({
   isSeen: !!n.read_at,
   color: typeColor(n.data?.type),
   icon: 'tabler-bell',
+  data: n.data ?? {},
 })
 
 const fetchNotifications = async () => {
@@ -86,6 +89,23 @@ const removeNotification = async notificationId => {
 const handleNotificationClick = notification => {
   if (!notification.isSeen)
     markRead([notification.id])
+
+  const data = notification.data ?? {}
+  const orderId = data.order_id ?? data.orderId ?? data.order?.id
+  const orderNumber = data.order_number ?? data.orderNumber ?? data.order?.order_number
+
+  const isWithdrawal = data.withdrawal_id || data.withdrawalId || data.action === 'view_withdrawal'
+
+  if (orderId) {
+    void router.push(`/orders/${orderId}`)
+  } else if (orderNumber) {
+    void router.push({ path: '/orders', query: { search: orderNumber } })
+  } else if (isWithdrawal) {
+    void router.push('/withdrawals')
+  } else if (data.url) {
+    const cleanUrl = data.url.replace(/^\/organizer/, '')
+    void router.push(cleanUrl)
+  }
 }
 </script>
 
