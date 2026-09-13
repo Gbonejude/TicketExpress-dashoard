@@ -111,7 +111,7 @@ const isPasswordVisible = ref(false)
                   :rules="[requiredField('Email'), emailValidator]"
                   label="Email"
                   type="email"
-                  placeholder="exemple@ticketexpress.tg"
+                  placeholder="nom@email.com"
                 />
               </VCol>
 
