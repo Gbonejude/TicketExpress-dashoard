@@ -37,6 +37,7 @@ const {
   organizerId: ownOrganizerId,
   canChooseOrganizer,
   isScopedToOwnOrganizer,
+  isAdminOrSuperAdmin,
 } = useCurrentOrganizer()
 
 const currentPage = ref(1)
@@ -174,9 +175,9 @@ const statusColor = status => ({
   rejected: 'error',
 })[status] ?? 'secondary'
 
-// Les actions suivent ce que le domaine autorise, pas une liste de statuts
-// recopiée dans la page.
-const canProcess = item => (item.nextStatuses?.length ?? 0) > 0
+// Traiter un retrait est strictement réservé aux administrateurs et super-administrateurs.
+// L'organisateur fait uniquement sa demande et peut l'annuler si elle est en attente.
+const canProcess = item => isAdminOrSuperAdmin.value && (item.nextStatuses?.length ?? 0) > 0
 const canDelete = item => item.status === 'pending' && !item.processedAt
 
 /* ─── Solde de l'organisateur choisi ────────────────────────────────────────── */
@@ -281,6 +282,8 @@ const saveWithdrawal = async () => {
 
 /* ─── Traiter ───────────────────────────────────────────────────────────────── */
 const openProcessDialog = item => {
+  if (!isAdminOrSuperAdmin.value) return
+
   processingWithdrawal.value = item
 
   // Premier statut atteignable : approuver depuis « en attente », payer depuis
@@ -755,6 +758,7 @@ const confirmDelete = async () => {
 
     <!-- ─── Dialog Traiter ──────────────────────────────────────────────────── -->
     <VDialog
+      v-if="isAdminOrSuperAdmin"
       v-model="isProcessDialogOpen"
       max-width="480"
     >
