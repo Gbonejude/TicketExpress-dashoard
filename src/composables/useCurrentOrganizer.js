@@ -35,6 +35,9 @@ export const useCurrentOrganizer = () => {
   /** Filtres : réservés aux comptes qui administrent les organisateurs. */
   const canChooseOrganizer = computed(() => ability.can('read', 'organizers'))
 
+  /** Formulaires : masquer le champ suppose pouvoir le remplir à sa place. */
+  const isScopedToOwnOrganizer = computed(() => isOrganizerUser.value && !!organizerId.value)
+
   /** Actions d'administration (ex: traitement des demandes de retrait) : réservées à admin et super-admin. */
   const isAdminOrSuperAdmin = computed(() => ['admin', 'super-admin'].includes(userData.value?.role))
 
