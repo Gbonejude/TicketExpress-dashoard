@@ -42,11 +42,26 @@ const {
 
 const currentPage = ref(1)
 const search = ref('')
-const statusFilter = ref(null)
 
-// Pas de filtre « organisateur » : la recherche porte déjà sur son nom (et sur le
-// numéro du demandeur). Un select en doublon aurait surtout obligé à charger la
-// liste complète des organisateurs à l'ouverture de la page.
+const STATUS_TABS = [
+  { value: 'all', title: 'Tous', icon: 'tabler-wallet' },
+  { value: 'pending', title: 'En attente', icon: 'tabler-clock', badgeKey: 'pending', color: 'warning' },
+  { value: 'approved', title: 'Approuvés', icon: 'tabler-circle-check', badgeKey: 'approved', color: 'info' },
+  { value: 'paid', title: 'Payés', icon: 'tabler-cash', badgeKey: 'paid', color: 'success' },
+  { value: 'rejected', title: 'Rejetés', icon: 'tabler-ban', badgeKey: 'rejected', color: 'error' },
+]
+
+const statusTab = ref('all')
+const statusFilter = computed(() => (statusTab.value === 'all' ? null : statusTab.value))
+
+const emptyText = computed(() => ({
+  pending: 'Aucune demande en attente',
+  approved: 'Aucun retrait approuvé',
+  paid: 'Aucun retrait payé',
+  rejected: 'Aucun retrait rejeté',
+})[statusTab.value] ?? 'Aucune demande de retrait')
+
+// Filtre méthode de paiement
 const methodFilter = ref(null)
 
 const isFormDialogOpen = ref(false)
@@ -126,6 +141,10 @@ const totalWithdrawals = computed(() => withdrawalsData.value?.meta?.total ?? 0)
 
 /** Totaux par statut, calculés par l'API sur l'ensemble filtré. */
 const stats = computed(() => withdrawalsData.value?.stats ?? {})
+
+const totalAll = computed(() => {
+  return Object.values(stats.value).reduce((sum, s) => sum + (s.count || 0), 0)
+})
 
 /**
  * Le libellé français est connu d'avance, et sert de repli.
@@ -438,13 +457,49 @@ const confirmDelete = async () => {
         </VBtn>
       </VCardTitle>
 
+      <!--
+        Les différents états d'un retrait sous forme d'onglets, comme sur Gestion des Organisateurs.
+      -->
+      <VTabs
+        v-model="statusTab"
+        class="px-2"
+      >
+        <VTab
+          v-for="tab in STATUS_TABS"
+          :key="tab.value"
+          :value="tab.value"
+        >
+          <VIcon
+            start
+            :icon="tab.icon"
+          />
+          {{ tab.title }}
+          <VChip
+            v-if="tab.badgeKey && (stats[tab.badgeKey]?.count ?? 0) > 0"
+            :color="tab.color ?? 'primary'"
+            size="x-small"
+            class="ms-2"
+          >
+            {{ stats[tab.badgeKey]?.count }}
+          </VChip>
+          <VChip
+            v-else-if="tab.value === 'all' && totalAll > 0"
+            color="primary"
+            size="x-small"
+            class="ms-2"
+          >
+            {{ totalAll }}
+          </VChip>
+        </VTab>
+      </VTabs>
+
       <VDivider />
 
       <VCardText>
         <VRow>
           <VCol
             cols="12"
-            md="6"
+            md="8"
           >
             <VTextField
               v-model="search"
@@ -457,22 +512,7 @@ const confirmDelete = async () => {
           </VCol>
           <VCol
             cols="12"
-            md="3"
-          >
-            <VSelect
-              v-model="statusFilter"
-              :items="statusOptions"
-              item-title="title"
-              item-value="value"
-              label="Statut"
-              placeholder="Tous"
-              density="compact"
-              clearable
-            />
-          </VCol>
-          <VCol
-            cols="12"
-            md="3"
+            md="4"
           >
             <VSelect
               v-model="methodFilter"
@@ -495,7 +535,7 @@ const confirmDelete = async () => {
         :items-per-page="15"
         :page="currentPage"
         :loading="isFetching"
-        no-data-text="Aucune demande de retrait"
+        :no-data-text="emptyText"
         class="text-no-wrap"
         @update:options="onTableOptions"
       >

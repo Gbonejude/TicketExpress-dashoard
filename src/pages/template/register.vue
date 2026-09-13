@@ -100,7 +100,7 @@ const isPasswordVisible = ref(false)
                   :rules="[requiredField('Nom d\'utilisateur')]"
                   autofocus
                   label="Nom d'utilisateur"
-                  placeholder="Johndoe"
+                  placeholder="Votre nom d'utilisateur"
                 />
               </VCol>
 
@@ -111,7 +111,7 @@ const isPasswordVisible = ref(false)
                   :rules="[requiredField('Email'), emailValidator]"
                   label="Email"
                   type="email"
-                  placeholder="johndoe@email.com"
+                  placeholder="exemple@ticketexpress.tg"
                 />
               </VCol>
 

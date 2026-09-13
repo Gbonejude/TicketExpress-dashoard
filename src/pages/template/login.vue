@@ -150,7 +150,7 @@ const onSubmit = () => {
                   autofocus
                   label="Email"
                   type="email"
-                  placeholder="johndoe@email.com"
+                  placeholder="exemple@ticketexpress.tg"
                   :rules="[requiredField('Email'), emailValidator]"
                   :error-messages="errors.email"
                 />
