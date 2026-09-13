@@ -484,12 +484,22 @@ const saveEvent = async () => {
 }
 
 const isEventPast = event => {
-  const startStr = event.startDate?.datetime
   const endStr = event.endDate?.datetime
+  const startStr = event.startDate?.datetime
   const now = new Date()
-  if (startStr && new Date(startStr) < now) return true
-  if (endStr && new Date(endStr) < now) return true
+  if (endStr) return new Date(endStr) < now
+  if (startStr) return new Date(startStr) < now
   return false
+}
+
+const effectiveItemStatus = event => {
+  if (event.status === 'published' && isEventPast(event)) return 'finished'
+  return event.status
+}
+
+const effectiveItemStatusLabel = event => {
+  if (event.status === 'published' && isEventPast(event)) return 'Terminé'
+  return event.statusLabel ?? event.status
 }
 
 const togglePublish = async event => {
@@ -699,13 +709,13 @@ const confirmDelete = async () => {
         <template #item.status="{ item }">
           <span
             :class="{
-              'text-secondary': statusColor(item.status) === 'secondary',
-              'text-success': statusColor(item.status) === 'success',
-              'text-error': statusColor(item.status) === 'error',
-              'text-info': statusColor(item.status) === 'info'
+              'text-secondary': statusColor(effectiveItemStatus(item)) === 'secondary',
+              'text-success': statusColor(effectiveItemStatus(item)) === 'success',
+              'text-error': statusColor(effectiveItemStatus(item)) === 'error',
+              'text-info': statusColor(effectiveItemStatus(item)) === 'info'
             }"
           >
-            {{ item.statusLabel ?? item.status }}
+            {{ effectiveItemStatusLabel(item) }}
           </span>
         </template>
 
@@ -802,7 +812,7 @@ const confirmDelete = async () => {
           </VTooltip>
 
           <VTooltip
-            v-else-if="item.status === 'published'"
+            v-else-if="effectiveItemStatus(item) === 'published'"
             text="Dépublier"
             location="top"
           >
@@ -821,7 +831,7 @@ const confirmDelete = async () => {
           </VTooltip>
 
           <VTooltip
-            v-if="item.status !== 'cancelled'"
+            v-if="effectiveItemStatus(item) !== 'cancelled' && effectiveItemStatus(item) !== 'finished'"
             text="Annuler"
             location="top"
           >
