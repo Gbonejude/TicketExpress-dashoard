@@ -444,6 +444,15 @@ const saveEvent = async () => {
   const { valid } = await formRef.value.validate()
   if (!valid) return
 
+  if (form.status === 'published') {
+    const isStartPast = form.start_date && new Date(form.start_date) < new Date()
+    const isEndPast = form.end_date && new Date(form.end_date) < new Date()
+    if (isStartPast || isEndPast) {
+      notify("Impossible de publier un événement dont la date et l'heure sont déjà passées.", 'error')
+      return
+    }
+  }
+
   isSubmitting.value = true
   formErrors.value = {}
   try {
@@ -474,13 +483,28 @@ const saveEvent = async () => {
   }
 }
 
+const isEventPast = event => {
+  const startStr = event.startDate?.datetime
+  const endStr = event.endDate?.datetime
+  const now = new Date()
+  if (startStr && new Date(startStr) < now) return true
+  if (endStr && new Date(endStr) < now) return true
+  return false
+}
+
 const togglePublish = async event => {
+  const isCancelled = event.status === 'cancelled'
   const action = event.status === 'published' ? 'unpublish' : 'publish'
+
+  if (action === 'publish' && isEventPast(event)) {
+    notify(`Impossible de ${isCancelled ? 'remettre en ligne' : 'publier'} un événement dont la date et l'heure sont déjà passées.`, 'error')
+    return
+  }
 
   isSubmitting.value = true
   try {
     await $api(`/events/${event.id}/${action}`, { method: 'POST' })
-    notify(action === 'publish' ? 'Événement publié.' : 'Événement dépublié.')
+    notify(action === 'publish' ? (isCancelled ? 'Événement remis en ligne.' : 'Événement publié.') : 'Événement dépublié.')
     fetchEvents()
   } catch (error) {
     notifyApiError(error, "Impossible de changer l'état de l'événement.")
@@ -739,8 +763,28 @@ const confirmDelete = async () => {
           </VTooltip>
 
           <VTooltip
-            v-if="item.status === 'draft'"
-            text="Publier"
+            v-if="(item.status === 'draft' || item.status === 'cancelled') && isEventPast(item)"
+            :text="item.status === 'cancelled' ? 'Impossible de remettre en ligne : la date et l\'heure de l\'événement sont déjà passées' : 'Impossible de publier : la date et l\'heure de l\'événement sont déjà passées'"
+            location="top"
+          >
+            <template #activator="{ props }">
+              <span v-bind="props" class="d-inline-block">
+                <VBtn
+                  icon
+                  variant="text"
+                  size="small"
+                  color="secondary"
+                  disabled
+                >
+                  <VIcon :icon="item.status === 'cancelled' ? 'tabler-refresh' : 'tabler-upload'" />
+                </VBtn>
+              </span>
+            </template>
+          </VTooltip>
+
+          <VTooltip
+            v-else-if="item.status === 'draft' || item.status === 'cancelled'"
+            :text="item.status === 'cancelled' ? 'Remettre en ligne' : 'Publier'"
             location="top"
           >
             <template #activator="{ props }">
@@ -752,7 +796,7 @@ const confirmDelete = async () => {
                 color="success"
                 @click="togglePublish(item)"
               >
-                <VIcon icon="tabler-upload" />
+                <VIcon :icon="item.status === 'cancelled' ? 'tabler-refresh' : 'tabler-upload'" />
               </VBtn>
             </template>
           </VTooltip>
