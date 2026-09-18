@@ -19,8 +19,9 @@ import { useAbility } from '@casl/vue'
 import { $api, toMediaUrl } from '@/utils/api'
 
 const { can } = useAbility()
+const route = useRoute()
 
-const search = ref('')
+const search = ref(typeof route.query?.search === 'string' ? route.query.search : '')
 const currentPage = ref(1)
 const isFormDialogOpen = ref(false)
 const isDeleteDialogOpen = ref(false)
@@ -80,7 +81,11 @@ const STATUS_TABS = [
   { value: 'rejected', title: 'Rejetées', icon: 'tabler-circle-x' },
 ]
 
-const statusTab = ref('all')
+const statusTab = ref(
+  ['pending', 'approved', 'rejected', 'all'].includes(route.query?.status)
+    ? route.query.status
+    : 'all',
+)
 
 // Filtre de la liste, distinct du champ `form.status` du formulaire : celui-ci
 // choisit le statut d'un dossier, celui-là choisit ce qu'on regarde.
@@ -122,13 +127,22 @@ const pendingCount = computed(() => pendingData.value?.meta?.total ?? 0)
  * rafraîchissent en temps réel, et sans ce garde une demande arrivant pendant
  * qu'on consulte les dossiers rejetés ramènerait l'écran sous les pieds.
  */
-const hasPickedTab = ref(false)
+const hasPickedTab = ref(Boolean(route.query?.status))
 let hasAutoOpenedPending = false
 
 watch(pendingCount, count => {
   if (hasAutoOpenedPending || hasPickedTab.value || count === 0) return
+  if (route.query?.status) return
   hasAutoOpenedPending = true
   statusTab.value = 'pending'
+})
+
+watch(() => route.query, query => {
+  if (typeof query?.search === 'string') search.value = query.search
+  if (['pending', 'approved', 'rejected', 'all'].includes(query?.status)) {
+    statusTab.value = query.status
+    hasPickedTab.value = true
+  }
 })
 
 /**

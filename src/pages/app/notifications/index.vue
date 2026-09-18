@@ -77,14 +77,63 @@ const router = useRouter()
 const getTarget = item => {
   const data = item.data ?? {}
 
-  if (data.order_id || data.orderId || data.order?.id)
-    return { type: 'order', id: data.order_id ?? data.orderId ?? data.order?.id }
-  if (data.order_number || data.orderNumber)
-    return { type: 'order_number', number: data.order_number ?? data.orderNumber }
+  const orderId = data.order_id ?? data.orderId ?? data.order?.id
+  if (orderId)
+    return { type: 'order', label: 'Voir la commande', to: `/orders/${orderId}` }
+
+  const orderNumber = data.order_number ?? data.orderNumber ?? data.order?.order_number
+  if (orderNumber)
+    return { type: 'order_number', label: 'Voir la commande', to: { path: '/orders', query: { search: orderNumber } } }
+
   if (data.withdrawal_id || data.withdrawalId || data.action === 'view_withdrawal')
-    return { type: 'withdrawal' }
-  if (data.url)
-    return { type: 'url', url: data.url.replace(/^\/organizer/, '') }
+    return { type: 'withdrawal', label: 'Voir le retrait', to: '/withdrawals' }
+
+  if (data.action === 'view_organizer' || data.organizer_id) {
+    return {
+      type: 'organizer',
+      label: 'Voir l’organisateur',
+      to: {
+        path: '/organizers',
+        query: {
+          ...(data.company_name ? { search: data.company_name } : {}),
+          status: 'pending',
+        },
+      },
+    }
+  }
+
+  if (data.action === 'view_event' && data.event_id)
+    return { type: 'event', label: 'Voir l’événement', to: `/events/${data.event_id}` }
+
+  if (data.url) {
+    const cleanUrl = data.url.replace(/^\/(?:admin|organizer)(?=\/|$)/, '')
+    if (!cleanUrl || cleanUrl === '/')
+      return { type: 'url', label: 'Consulter', to: '/dashboard' }
+
+    if (cleanUrl.startsWith('/organizers')) {
+      return {
+        type: 'organizer',
+        label: 'Voir l’organisateur',
+        to: {
+          path: '/organizers',
+          query: {
+            ...(data.company_name ? { search: data.company_name } : {}),
+            status: 'pending',
+          },
+        },
+      }
+    }
+
+    try {
+      const resolved = router.resolve(cleanUrl)
+      if (resolved?.matched?.length > 0)
+        return { type: 'url', label: 'Consulter', to: cleanUrl }
+    } catch {
+      // ignore
+    }
+
+    return { type: 'url', label: 'Consulter', to: '/dashboard' }
+  }
 
   return null
 }
@@ -96,15 +145,8 @@ const goToTarget = item => {
   if (!item.read_at)
     void markAsRead(item)
 
-  if (target.type === 'order') {
-    void router.push(`/orders/${target.id}`)
-  } else if (target.type === 'order_number') {
-    void router.push({ path: '/orders', query: { search: target.number } })
-  } else if (target.type === 'withdrawal') {
-    void router.push('/withdrawals')
-  } else if (target.type === 'url') {
-    void router.push(target.url)
-  }
+  if (target.to)
+    void router.push(target.to)
 }
 </script>
 
@@ -197,7 +239,7 @@ const goToTarget = item => {
         <template #item.actions="{ item }">
           <VTooltip
             v-if="getTarget(item)"
-            :text="getTarget(item)?.type === 'withdrawal' ? 'Voir le retrait' : 'Voir la commande'"
+            :text="getTarget(item)?.label ?? 'Consulter'"
             location="top"
           >
             <template #activator="{ props }">

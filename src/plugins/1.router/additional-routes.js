@@ -58,6 +58,66 @@ export const redirects = [
     name: 'template-pages-account-settings',
     redirect: () => ({ name: 'template-pages-account-settings-tab', params: { tab: 'account' } }),
   },
+
+  // 👉 Compatibilité & Redirections des URL de notifications (/admin/... et /organizer/...)
+  {
+    path: '/admin/organizers/:pathMatch(.*)*',
+    redirect: () => ({ path: '/organizers' }),
+  },
+  {
+    path: '/admin/events/:id',
+    redirect: to => ({ path: `/events/${to.params.id}` }),
+  },
+  {
+    path: '/admin/events',
+    redirect: () => ({ path: '/events' }),
+  },
+  {
+    path: '/admin/orders/:id',
+    redirect: to => ({ path: `/orders/${to.params.id}` }),
+  },
+  {
+    path: '/admin/orders',
+    redirect: () => ({ path: '/orders' }),
+  },
+  {
+    path: '/admin/withdrawals',
+    redirect: () => ({ path: '/withdrawals' }),
+  },
+  {
+    path: '/admin/:pathMatch(.*)*',
+    redirect: to => {
+      const p = to.params.pathMatch
+      return p ? { path: `/${p}` } : { path: '/dashboard' }
+    },
+  },
+  {
+    path: '/organizer/orders/:id',
+    redirect: to => ({ path: `/orders/${to.params.id}` }),
+  },
+  {
+    path: '/organizer/orders',
+    redirect: () => ({ path: '/orders' }),
+  },
+  {
+    path: '/organizer/events/:id',
+    redirect: to => ({ path: `/events/${to.params.id}` }),
+  },
+  {
+    path: '/organizer/events',
+    redirect: () => ({ path: '/events' }),
+  },
+  {
+    path: '/organizer/:pathMatch(.*)*',
+    redirect: to => {
+      const p = to.params.pathMatch
+      return p ? { path: `/${p}` } : { path: '/dashboard' }
+    },
+  },
+  {
+    path: '/organizers/:id',
+    redirect: () => ({ path: '/organizers' }),
+  },
 ]
 export const routes = [
   // Email filter
@@ -96,5 +156,14 @@ export const routes = [
     path: '/apps/ecommerce/dashboard',
     name: 'template-apps-ecommerce-dashboard',
     component: () => import('@/pages/template/dashboards/ecommerce.vue'),
+  },
+  {
+    path: '/:pathMatch(.*)*',
+    name: 'template-not-found-fallback',
+    component: () => import('@/pages/template/[...error].vue'),
+    meta: {
+      layout: 'blank',
+      public: true,
+    },
   },
 ]
