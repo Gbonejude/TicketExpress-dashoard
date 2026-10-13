@@ -1,7 +1,7 @@
 <div align="center">
 <img src="public/favicon.png" width="120" alt="Ticket Express Logo">
 
-# 🎟️ Ticket Express · Dashboard Web
+# Ticket Express · Dashboard Web
 
 **Interface d'administration de la plateforme de billetterie et de gestion d'événements**
 
@@ -17,20 +17,20 @@ _Événements · Billetterie · Paiements en temps réel_
 
 ---
 
-## 📋 Table des matières
+## Table des matières
 
-- [À propos](#-à-propos)
-- [Fonctionnalités](#-fonctionnalités)
-- [Stack technique](#-stack-technique)
-- [Démarrage rapide](#-démarrage-rapide)
-- [Structure du projet](#-structure-du-projet)
-- [Variables d'environnement](#-variables-denvironnement)
-- [Sécurité](#-sécurité)
-- [Contribuer](#-contribuer)
+- [À propos](#à-propos)
+- [Fonctionnalités](#fonctionnalités)
+- [Stack technique](#stack-technique)
+- [Démarrage rapide](#démarrage-rapide)
+- [Structure du projet](#structure-du-projet)
+- [Variables d'environnement](#variables-denvironnement)
+- [Sécurité](#sécurité)
+- [Contribuer](#contribuer)
 
 ---
 
-## 🎯 À propos
+## À propos
 
 Ce dépôt contient le **dashboard web d'administration** de la plateforme **Ticket Express**, une solution de billetterie en ligne qui met en relation des organisateurs d'événements avec leur public.
 
@@ -40,35 +40,35 @@ Le dashboard permet aux administrateurs de superviser et gérer l'ensemble de la
 
 ---
 
-## ✨ Fonctionnalités
+## Fonctionnalités
 
 ### Gestion des événements & de la billetterie
 
-- 🎪 **Événements** — Création, édition et publication d'événements
-- 🎟️ **Billets** — Configuration des catégories de billets, quotas et tarifs
-- 🏟️ **Salles / Lieux (venues)** — Gestion des lieux d'accueil
-- 🗂️ **Catégories** — Classement des événements par catégorie
-- 🏷️ **Coupons & Promotions** — Codes de réduction et offres promotionnelles
+- **Événements** — Création, édition et publication d'événements
+- **Billets** — Configuration des catégories de billets, quotas et tarifs
+- **Salles / Lieux (venues)** — Gestion des lieux d'accueil
+- **Catégories** — Classement des événements par catégorie
+- **Coupons & Promotions** — Codes de réduction et offres promotionnelles
 
 ### Ventes & finances
 
-- 🧾 **Commandes** — Suivi des commandes et de leur statut
-- 💳 **Paiements** — Historique et suivi des transactions
-- 💸 **Retraits (withdrawals)** — Gestion des reversements aux organisateurs
-- ⭐ **Avis (reviews)** — Modération des évaluations des participants
+- **Commandes** — Suivi des commandes et de leur statut
+- **Paiements** — Historique et suivi des transactions
+- **Retraits (withdrawals)** — Gestion des reversements aux organisateurs
+- **Avis (reviews)** — Modération des évaluations des participants
 
 ### Administration
 
-- 🧑‍💼 **Organisateurs** — Gestion et validation des comptes organisateurs
-- 👥 **Utilisateurs** — Vue d'ensemble des comptes et statuts
-- 🔐 **Rôles & permissions** — Contrôle d'accès par rôle
-- 🔔 **Notifications** — Centre de notifications
-- ⚙️ **Paramètres & Compte** — Configuration de la plateforme et profil admin
-- 📊 **Dashboard** — Indicateurs clés et vue synthétique de l'activité
+- **Organisateurs** — Gestion et validation des comptes organisateurs
+- **Utilisateurs** — Vue d'ensemble des comptes et statuts
+- **Rôles & permissions** — Contrôle d'accès par rôle
+- **Notifications** — Centre de notifications
+- **Paramètres & Compte** — Configuration de la plateforme et profil admin
+- **Dashboard** — Indicateurs clés et vue synthétique de l'activité
 
 ---
 
-## 🏗️ Stack technique
+## Stack technique
 
 | Technologie | Rôle |
 |---|---|
@@ -84,7 +84,7 @@ Le dashboard permet aux administrateurs de superviser et gérer l'ensemble de la
 
 ---
 
-## 🚀 Démarrage rapide
+## Démarrage rapide
 
 ### Prérequis
 
@@ -118,7 +118,7 @@ pnpm preview
 
 ---
 
-## 📁 Structure du projet
+## Structure du projet
 
 ```
 src/
@@ -152,7 +152,7 @@ src/
 
 ---
 
-## ⚙️ Variables d'environnement
+## Variables d'environnement
 
 Copier `.env.example` en `.env` et renseigner les valeurs :
 
@@ -165,7 +165,7 @@ Le composable `useApi` utilise automatiquement cette variable pour toutes les re
 
 ---
 
-## 🔒 Sécurité
+## Sécurité
 
 - Les requêtes API sont authentifiées via **token Bearer** (Laravel Sanctum).
 - Le token est stocké dans un cookie `accessToken` et injecté automatiquement dans chaque requête.
@@ -173,7 +173,7 @@ Le composable `useApi` utilise automatiquement cette variable pour toutes les re
 
 ---
 
-## 🤝 Contribuer
+## Contribuer
 
 1. Créer une branche : `git checkout -b feature/nom-de-la-feature`
 2. Développer et tester localement : `pnpm dev`
@@ -184,7 +184,7 @@ Le composable `useApi` utilise automatiquement cette variable pour toutes les re
 
 <div align="center">
 
-Fait avec ❤️ par l'équipe **Ticket Express**
+Fait par l'équipe **Ticket Express**
 
 _La billetterie d'événements, simple et en temps réel._
 
